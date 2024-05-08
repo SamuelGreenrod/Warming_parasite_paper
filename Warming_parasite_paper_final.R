@@ -1862,9 +1862,12 @@ qPCR_data$Fold_change_DNAconc_to_zero <- as.numeric(qPCR_data$Fold_change_DNAcon
 qPCR_data$Time <- as.numeric(qPCR_data$Time)
 qPCR_data$Temp <- as.factor(qPCR_data$Temp)
 
+PEV2_qPCR <- qPCR_data[(qPCR_data$Phage=="PEV2"),]
+LUZ19_qPCR <- qPCR_data[(qPCR_data$Phage=="LUZ19"),]
+phage14_qPCR <- qPCR_data[(qPCR_data$Phage=="phage14"),]
+
 
 # PEV2
-pev2_qPCR_late_3740 <- PEV2_qPCR[(PEV2_qPCR$Time=="5"),]
 pev2_qPCR_late_3740 <- PEV2_qPCR[(PEV2_qPCR$Time=="5" & PEV2_qPCR$Temp!=42),]
 pev2_qPCR_late_3740$Competitor <- factor(pev2_qPCR_late_3740$Competitor, levels=c("No_competitor","LUZ19", "phage14","3P"), labels=c("No competitor","LUZ19","14-1","3-phage"))
 
@@ -1904,7 +1907,6 @@ cvd_grid(phage14_3740_tempcomp)
 
 # LUZ19
 
-luz19_qPCR_late_3740 <- LUZ19_qPCR[(LUZ19_qPCR$Time=="5"),]
 luz19_qPCR_late_3740 <- LUZ19_qPCR[(LUZ19_qPCR$Time=="5" & LUZ19_qPCR$Temp!=42),]
 luz19_qPCR_late_3740$Treatment <- factor(luz19_qPCR_late_3740$Treatment, levels=c("luz19", "PL", "L14","3P"), labels=c("LUZ19", "P + L","L + 14-1", "3-phage"))
 luz19_qPCR_late_3740$Competitor <- factor(luz19_qPCR_late_3740$Competitor, levels=c("No_competitor","PEV2", "phage14","3P"), labels=c("No competitor","PEV2","14-1","3-phage"))
@@ -1944,7 +1946,6 @@ luz19_3740_tempcomp <-ggplot(data=luz19_qPCR_late_3740, aes(Competitor, Fold_cha
 
 # 14-1
 
-phage14_qPCR_late_3740 <- phage14_qPCR[(phage14_qPCR$Time=="5"),]
 phage14_qPCR_late_3740 <- phage14_qPCR[(phage14_qPCR$Time=="5" & phage14_qPCR$Temp!=42),]
 phage14_qPCR_late_3740$Treatment <- factor(phage14_qPCR_late_3740$Treatment, levels=c("phage14", "P14", "L14","3P"), labels=c("14-1", "P + 14-1","L + 14-1", "3-phage"))
 phage14_qPCR_late_3740$Competitor <- factor(phage14_qPCR_late_3740$Competitor, levels=c("No_competitor","PEV2", "LUZ19","3P"), labels=c("No competitor","PEV2","LUZ19","3-phage"))
