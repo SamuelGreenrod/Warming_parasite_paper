@@ -31,29 +31,30 @@ require("ggtext")
 
 
 #Figure S1 - Optical density is correlated with colony-forming units
-CFU_OD_regression <- read.csv("CFU_OD_regression.csv")
+CFU_OD_regression <- read_csv("CFU_OD_regression.csv")
 
-model <- lm(sqrt(CFU_ml) ~ OD, data= CFU_OD_regression)
+model <- CFU_OD_regression %>%
+  lm(sqrt(CFU_ml) ~ OD, data = .)
+
 autoplot(model)
-
 summary(model)
 
+model <- CFU_OD_regression %>%
+  lm(sqrt(CFU_ml) ~ OD, data = .)
 
-predslm = predict(model,type = "response", se.fit=T)
+predslm <- predict(model,type = "response", se.fit=T)
 
-predslm$CI <- predslm$se.fit * 1.96
-predslm <- data.frame(predslm)
-predslm$upperfit <- predslm$fit + predslm$CI
-predslm$lowerfit <- predslm$fit - predslm$CI
-datlm = cbind(CFU_OD_regression, predslm)
+CFU_OD_regression <- CFU_OD_regression %>%
+  mutate(predictions = predslm$fit) %>%
+  mutate(se_fit = predslm$se.fit) %>%
+  mutate(conf_int = se_fit * 1.96) %>%
+  mutate(upper_fit = predictions + conf_int) %>%
+  mutate(lower_fit = predictions - conf_int)
 
-
-OD_CFU <- ggplot(datlm, aes(OD, sqrt(CFU_ml))) +
-  geom_ribbon( aes(ymin = lowerfit, ymax = upperfit), alpha = .15) +
-  geom_line( aes(y = fit), size = 0.8, col = "darkred")+
+OD_CFU <- ggplot(CFU_OD_regression, aes(OD, sqrt(CFU_ml))) +
+  geom_ribbon( aes(ymin = lower_fit, ymax = upper_fit), alpha = .15) +
+  geom_line( aes(y = predictions), size = 0.8, col = "darkred")+
   geom_point()+
-  #ylim(0,3*10^8)+
-  #stat_smooth(method = glm, method.args = list(family = "poisson"))+
   labs(x="Optical density (OD595)", y="Colony-forming units (CFU/ml) (square-root)", colour = "Time point")+
   theme_bw()+
   theme(legend.title = element_text(colour="black", size=12,face="bold"),legend.text = element_text(size=12))+
@@ -73,9 +74,12 @@ BactOD$OD <- as.numeric(BactOD$OD)
 BactOD$Temp <- as.factor(BactOD$Temp)
 BactOD$Phage <- factor(BactOD$Phage, levels = c("14_1", "3-phage_cocktail", "LUZ19" ,"LUZ19_14-1" ,  "No_phage" ,   "PEV2" , "PEV2_14-1" , "PEV2_LUZ19"))
 
-nophage <- BactOD[(BactOD$Phage=="No_phage"),]
-singlephage <- BactOD[(BactOD$Phage=="No_phage" | BactOD$Phage=="PEV2" | BactOD$Phage=="LUZ19" | BactOD$Phage=="14_1"),]
+nophage <- BactOD %>%
+  filter(Phage=="No_phage")
 
+singlephage <- BactOD %>%
+  filter(Phage %in% c("No_phage", "PEV2", "LUZ19", "14_1"))
+    
 # Single phage
 
 singlephage$Phage <- factor(singlephage$Phage, levels=c("No_phage", "PEV2", "LUZ19","14_1"))
@@ -102,46 +106,49 @@ bacterialgrowth_wphage <- ggplot(singlephage, aes(hour, OD, colour = as.factor(P
 
 ## OD stats for single phage
 
-phagelysis37 <- singlephage[(singlephage$hour=="5"),]
-phagelysis37 <- phagelysis37[(phagelysis37$Temp=="37"),]
+# Prepare the data
+OD_stats <- singlephage %>%
+  group_by(Temp) %>%
+  filter(hour == "5") %>%
+  nest()
 
-# Unequal variances
-model <- lme(OD ~ Phage, random= ~1|Batch, data= phagelysis37, method = "REML")
-plot(model)
+# Run model
 
-#Make model that accounts for unequal variances
-model2 <- lme(OD ~ Phage, random= ~1|Batch, data= phagelysis37, method = "REML", weights = varIdent(form = ~1|Phage))
-plot(model2)
-anova(model2)
-summary(model2)
-emmeans(model2, pairwise ~ Phage)
+OD_models <- OD_stats %>%
+  mutate(model = map(data, ~lme(OD ~ Phage, random= ~1|Batch, data= ., method = "REML")))
+
+# Diagnostic plots showing unequal variances
+T37 <- OD_models$model[[1]]
+plot(T37) 
+
+T40 <- OD_models$model[[2]]
+plot(T40)
+
+T42 <- OD_models$model[[3]]
+plot(T42)
 
 
-phagelysis40 <- singlephage[(singlephage$hour=="5"),]
-phagelysis40 <- phagelysis40[(phagelysis40$Temp=="40"),]
+# Revised model accounting for unequal variances including pairwise comparisons
 
-# Unequal variances
-model <- lme(OD ~ Phage, random= ~1|Batch, data= phagelysis40, method = "REML")
-plot(model)
+revised_OD_models <- OD_stats %>%
+  mutate(model = map(data, ~lme(OD ~ Phage, random= ~1|Batch, data= ., method = "REML", weights = varIdent(form = ~1|Phage)))) %>%
+  mutate(model_summary = map(model, summary)) %>%
+  mutate(model_pairwise = map(model, ~ {
+    emmeans(.x, pairwise ~ Phage)
+    }))
 
-#Make model that accounts for unequal variances
-model2 <- lme(OD ~ Phage, random= ~1|Batch, data= phagelysis40, method = "REML", weights = varIdent(form = ~1|Phage))
-plot(model2)
-anova(model2)
-emmeans(model2, pairwise ~ Phage)
+T37_new <- revised_OD_models$model[[1]]
+plot(T37_new) 
 
-phagelysis42 <- singlephage[(singlephage$hour=="5"),]
-phagelysis42 <- phagelysis42[(phagelysis42$Temp=="42"),]
+T40_new <- revised_OD_models$model[[2]]
+plot(T40_new)
 
-# Unequal variances
-model <- lme(OD ~ Phage, random= ~1|Batch, data= phagelysis42, method = "REML")
-plot(model)
+T42_new <- revised_OD_models$model[[3]]
+plot(T42_new)
 
-#Make model that accounts for unequal variances
-model2 <- lme(OD ~ Phage, random= ~1|Batch, data= phagelysis42, method = "REML", weights = varIdent(form = ~1|Phage))
-plot(model2)
-anova(model2)
-emmeans(model2, pairwise ~ Phage)
+revised_OD_models$model_summary
+revised_OD_models$model_pairwise
+
 
 
 # Figure 1B - Plaque assay results
@@ -1959,7 +1966,7 @@ phage14_3740_tempcomp <- ggplot(data=phage14_qPCR_late_3740, aes(Competitor, Fol
   #geom_violin(alpha=0.5, position = position_dodge(width = .75),size=1,color=NA)+
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
   ggbeeswarm::geom_quasirandom(shape = 21,size=3, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
-  ylab("Relative phage DNA concentration") +
+  ylab("Phage growth (fold increase) across 5 hour period") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(100,22000)) +
   annotation_logticks(sides="l")+
@@ -1974,10 +1981,10 @@ phage14_3740_tempcomp <- ggplot(data=phage14_qPCR_late_3740, aes(Competitor, Fol
   geom_smooth(method = "lm")+
   scale_fill_manual(values = c("#ffeda0","#feb24c"))+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
-  theme(axis.title.y=element_blank()) + 
-  theme(axis.title=element_text(size=10,face="bold")) + 
+  #theme(axis.title.y=element_blank()) + 
+  theme(axis.title=element_text(size=12,face="bold")) + 
   #theme(axis.text.x = element_text(angle = 45, vjust = 0.1, hjust=1))+
-  theme(legend.title = element_text(colour="black", size=10,face="bold"),legend.text = element_text(size=9))
+  theme(legend.title = element_text(colour="black", size=11,face="bold"),legend.text = element_text(size=9))
 
 pev2_3740_tempcomp + luz19_3740_tempcomp + phage14_3740_tempcomp + plot_layout(guides="collect")& theme(legend.position="bottom")
 
