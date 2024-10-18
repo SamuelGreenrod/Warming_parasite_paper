@@ -215,7 +215,8 @@ qPCR_data$Fold_change_DNAconc_to_zero <- as.numeric(qPCR_data$Fold_change_DNAcon
 qPCR_data$Time <- as.numeric(qPCR_data$Time)
 qPCR_data$Temp <- as.factor(qPCR_data$Temp)
 
-qPCR_data_single <- qPCR_data[which(qPCR_data$Treatment==c('P','L','phage14')),] 
+qPCR_data_single <- qPCR_data %>%
+  filter(Treatment %in% c('P','L','phage14'))
 
 options(scipen=999) # To make the Y-axis correct numbers
 
@@ -241,95 +242,29 @@ phagegrowth_wtemp <- ggplot(qPCR_data_single, aes(Time, Fold_change_DNAconc_to_z
   theme(strip.text = element_text(face="bold", size=9),
         strip.background = element_rect(fill="lightgrey", colour="black",size=0.3))
 
+
 ## qPCR stats for single phage over time
 
-## Statistical models of DNA conc at 37C for each phage
-P_qPCR_37 <- qPCR_data[(qPCR_data$Time=="5" | qPCR_data$Time=="0"),]
-P_qPCR_37 <- P_qPCR_37[(P_qPCR_37$Temp=="37"),]
-P_qPCR_37 <- P_qPCR_37[(P_qPCR_37$Treatment=="P"),]
+# Make models
+qpcr_grouped_data <- qPCR_data_single %>%
+  group_by(Temp, Treatment) %>%
+  filter(Time %in% c("0", "5")) %>%
+  nest()
 
-model2 <- lme(log(DNA_conc) ~ Time, random= ~1|Rep, data= P_qPCR_37, method = "REML")
+qpcr_models <- qpcr_grouped_data %>%
+  mutate(model = map(data, ~ lme(log(DNA_conc) ~ Time, random= ~1|Rep, data= ., method = "REML"))) %>%
+  mutate(model_summaries = map(model, summary))
 
-plot(model2)
-anova(model2)
+# Diagnostic plots
+length(qpcr_models$model)
 
-
-L_qPCR_37 <- qPCR_data[(qPCR_data$Time=="5" | qPCR_data$Time=="0"),]
-L_qPCR_37 <- L_qPCR_37[(L_qPCR_37$Temp=="37"),]
-L_qPCR_37 <- L_qPCR_37[(L_qPCR_37$Treatment=="L"),]
-
-model2 <- lme(log(DNA_conc) ~ Time, random= ~1|Rep, data= L_qPCR_37, method = "REML")
-
-plot(model2)
-anova(model2)
-
-p14_qPCR_37 <- qPCR_data[(qPCR_data$Time=="5" | qPCR_data$Time=="0"),]
-p14_qPCR_37 <- p14_qPCR_37[(p14_qPCR_37$Temp=="37"),]
-p14_qPCR_37 <- p14_qPCR_37[(p14_qPCR_37$Treatment=="phage14"),]
-
-model2 <- lme(log(DNA_conc) ~ Time, random= ~1|Rep, data= p14_qPCR_37, method = "REML")
-
-plot(model2)
-anova(model2)
+plots <- lapply(1:9, function(i) plot(qpcr_models$model[[i]], main = paste(qpcr_models$Treatment[[i]], qpcr_models$Temp[[i]])))
+cowplot::plot_grid(plotlist = plots)
 
 
-## Statistical models of DNA conc at 40C for each phage
-P_qPCR_40 <- qPCR_data[(qPCR_data$Time=="5" | qPCR_data$Time=="0"),]
-P_qPCR_40 <- P_qPCR_40[(P_qPCR_40$Temp=="40"),]
-P_qPCR_40 <- P_qPCR_40[(P_qPCR_40$Treatment=="P"),]
+# Generate model summaries
+qpcr_models$model_summaries
 
-model2 <- lme(log(DNA_conc) ~ Time, random= ~1|Rep, data= P_qPCR_40, method = "REML")
-
-plot(model2)
-anova(model2)
-
-
-L_qPCR_40 <- qPCR_data[(qPCR_data$Time=="5" | qPCR_data$Time=="0"),]
-L_qPCR_40 <- L_qPCR_40[(L_qPCR_40$Temp=="40"),]
-L_qPCR_40 <- L_qPCR_40[(L_qPCR_40$Treatment=="L"),]
-
-model2 <- lme(log(DNA_conc) ~ Time, random= ~1|Rep, data= L_qPCR_40, method = "REML")
-
-plot(model2)
-anova(model2)
-
-p14_qPCR_40 <- qPCR_data[(qPCR_data$Time=="5" | qPCR_data$Time=="0"),]
-p14_qPCR_40 <- p14_qPCR_40[(p14_qPCR_40$Temp=="40"),]
-p14_qPCR_40 <- p14_qPCR_40[(p14_qPCR_40$Treatment=="phage14"),]
-
-model2 <- lme(log(DNA_conc) ~ Time, random= ~1|Rep, data= p14_qPCR_40, method = "REML")
-
-plot(model2)
-anova(model2)
-
-## Statistical models of DNA conc at 42C for each phage
-P_qPCR_42 <- qPCR_data[(qPCR_data$Time=="5" | qPCR_data$Time=="0"),]
-P_qPCR_42 <- P_qPCR_42[(P_qPCR_42$Temp=="42"),]
-P_qPCR_42 <- P_qPCR_42[(P_qPCR_42$Treatment=="P"),]
-
-model2 <- lme(log(DNA_conc) ~ Time, random= ~1|Rep, data= P_qPCR_42, method = "REML")
-
-plot(model2)
-anova(model2)
-
-
-L_qPCR_42 <- qPCR_data[(qPCR_data$Time=="5" | qPCR_data$Time=="0"),]
-L_qPCR_42 <- L_qPCR_42[(L_qPCR_42$Temp=="42"),]
-L_qPCR_42 <- L_qPCR_42[(L_qPCR_42$Treatment=="L"),]
-
-model2 <- lme(log(DNA_conc) ~ Time, random= ~1|Rep, data= L_qPCR_42, method = "REML")
-
-plot(model2)
-anova(model2)
-
-p14_qPCR_42 <- qPCR_data[(qPCR_data$Time=="5" | qPCR_data$Time=="0"),]
-p14_qPCR_42 <- p14_qPCR_42[(p14_qPCR_42$Temp=="42"),]
-p14_qPCR_42 <- p14_qPCR_42[(p14_qPCR_42$Treatment=="phage14"),]
-
-model2 <- lme(log(DNA_conc) ~ Time, random= ~1|Rep, data= p14_qPCR_42, method = "REML")
-
-plot(model2)
-anova(model2)
 
 
 # Plot
