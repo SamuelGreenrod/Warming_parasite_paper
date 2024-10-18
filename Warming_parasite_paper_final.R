@@ -12,7 +12,6 @@ require("patchwork")
 require("tidyverse") 
 require("zoo") 
 require("broom")
-require("dplyr")
 require("ggbeeswarm")
 require("nlme")
 require("emmeans")
@@ -183,92 +182,28 @@ phagegrowth_temp_pfu <- ggplot(pfu, aes(Time_hour, Rel_pfu_ml, colour = as.facto
   theme(strip.text = element_text(face="bold", size=9),
         strip.background = element_rect(fill="lightgrey", colour="black",size=0.3))
 
-pev2_plaque_data <- pfu[(pfu$Phage=="PEV2"),]
-luz19_plaque_data <- pfu[(pfu$Phage=="LUZ19"),]
-phage14_plaque_data <- pfu[(pfu$Phage=="14-1"),]
+
+# Make models
+pfu_grouped_data <- pfu %>%
+  group_by(Temp, Phage) %>%
+  filter(Time %in% c("T0", "T5")) %>%
+  nest()
+  
+pfu_models <- pfu_grouped_data %>%
+  mutate(model = map(data, ~ lme(pfu_ml ~ Time, random= ~1|Rep, data= ., method = "REML", weights = varIdent(form = ~1|Time)))) %>%
+  mutate(model_summaries = map(model, summary))
+
+# Diagnostic plots
+length(pfu_models$model)
+
+plots <- lapply(1:9, function(i) plot(pfu_models$model[[i]], main = paste(pfu_models$Phage[[i]], pfu_models$Temp[[i]])))
+cowplot::plot_grid(plotlist = plots)
 
 
-
-## Statistical models of PFU/ml at 37C for each phage
-
-PFU_wphage_P <- pev2_plaque_data[(pev2_plaque_data$Time=="T5" | pev2_plaque_data$Time=="T0"),]
-PFU_wphage37_P <- PFU_wphage_P[(PFU_wphage_P$Temp=="37"),]
-
-model2 <- lme(pfu_ml ~ Time, random= ~1|Rep, data= PFU_wphage37_P, method = "REML", weights = varIdent(form = ~1|Time))
-plot(model2)
-anova(model2)
+# Generate model summaries
+pfu_models$model_summaries
 
 
-PFU_wphage37_L <- luz19_plaque_data[(luz19_plaque_data$Time=="T5" | luz19_plaque_data$Time=="T0"),]
-PFU_wphage37_L <- PFU_wphage37_L[(PFU_wphage37_L$Temp=="37"),]
-
-model2 <- lme(pfu_ml ~ Time, random= ~1|Rep, data= PFU_wphage37_L, method = "REML", weights = varIdent(form = ~1|Time))
-plot(model2)
-anova(model2)
-
-
-PFU_wphage37_14 <- phage14_1_plaque_data[(phage14_1_plaque_data$Time=="T5" | phage14_1_plaque_data$Time=="T0"),]
-PFU_wphage37_14 <- PFU_wphage37_14[(PFU_wphage37_14$Temp=="37"),]
-
-model2 <- lme(pfu_ml ~ Time, random= ~1|Rep, data= PFU_wphage37_14, method = "REML", weights = varIdent(form = ~1|Time))
-plot(model2)
-anova(model2)
-
-
-## Statistical models of PFU/ml at 40C for each phage
-
-PFU_wphage_P <- pev2_plaque_data[(pev2_plaque_data$Time=="T5" | pev2_plaque_data$Time=="T0"),]
-PFU_wphage40_P <- PFU_wphage_P[(PFU_wphage_P$Temp=="40"),]
-
-model2 <- lme(pfu_ml ~ Time, random= ~1|Rep, data= PFU_wphage40_P, method = "REML", weights = varIdent(form = ~1|Time))
-plot(model2)
-anova(model2)
-emmeans(model2, pairwise ~ Phage)
-
-
-PFU_wphage40_L <- luz19_plaque_data[(luz19_plaque_data$Time=="T5" | luz19_plaque_data$Time=="T0"),]
-PFU_wphage40_L <- PFU_wphage40_L[(PFU_wphage40_L$Temp=="40"),]
-
-model2 <- lme(pfu_ml ~ Time, random= ~1|Rep, data= PFU_wphage40_L, method = "REML", weights = varIdent(form = ~1|Time))
-plot(model2)
-anova(model2)
-
-
-PFU_wphage40_14 <- phage14_1_plaque_data[(phage14_1_plaque_data$Time=="T5" | phage14_1_plaque_data$Time=="T0"),]
-PFU_wphage40_14 <- PFU_wphage40_14[(PFU_wphage40_14$Temp=="40"),]
-
-model2 <- lme(pfu_ml ~ Time, random= ~1|Rep, data= PFU_wphage40_14, method = "REML", weights = varIdent(form = ~1|Time))
-plot(model2)
-anova(model2)
-
-
-
-## Statistical models of PFU/ml at 42C for each phage
-
-PFU_wphage_P <- pev2_plaque_data[(pev2_plaque_data$Time=="T5" | pev2_plaque_data$Time=="T0"),]
-PFU_wphage42_P <- PFU_wphage_P[(PFU_wphage_P$Temp=="42"),]
-
-model2 <- lme(pfu_ml ~ Time, random= ~1|Rep, data= PFU_wphage42_P, method = "REML", weights = varIdent(form = ~1|Time))
-plot(model2)
-anova(model2)
-summary(model2)
-
-
-PFU_wphage42_L <- luz19_plaque_data[(luz19_plaque_data$Time=="T5" | luz19_plaque_data$Time=="T0"),]
-PFU_wphage42_L <- PFU_wphage42_L[(PFU_wphage42_L$Temp=="42"),]
-
-model2 <- lme(pfu_ml ~ Time, random= ~1|Rep, data= PFU_wphage42_L, method = "REML", weights = varIdent(form = ~1|Time))
-plot(model2)
-anova(model2)
-summary(model2)
-
-
-PFU_wphage42_14 <- phage14_plaque_data[(phage14_plaque_data$Time=="T5" | phage14_plaque_data$Time=="T0"),]
-PFU_wphage42_14 <- PFU_wphage42_14[(PFU_wphage42_14$Temp=="42"),]
-
-model2 <- lme(pfu_ml ~ Time, random= ~1|Rep, data= PFU_wphage42_14, method = "REML", weights = varIdent(form = ~1|Time))
-plot(model2)
-anova(model2)
 
 
 
