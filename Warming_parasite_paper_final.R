@@ -20,7 +20,6 @@ require("FSA")
 require("pgirmess")
 require("DescTools")
 require("ggpmisc")
-require("plyr")
 require("devtools")
 require("ggradar")
 require("scales")
@@ -266,7 +265,6 @@ cowplot::plot_grid(plotlist = plots)
 qpcr_models$model_summaries
 
 
-
 # Plot
 bacterialgrowth_wphage / phagegrowth_temp_pfu / phagegrowth_wtemp + plot_layout(guides="collect")  & theme(legend.position = 'bottom')
 
@@ -281,7 +279,12 @@ CFU_wphage <- read.csv("CFU_sodiumcitrate.csv",fileEncoding="UTF-8-BOM")
 CFU_wphage$Phage <- factor(CFU_wphage$Phage, levels=c("No_phage","pev2","luz19","14_1"), labels=c("No phage","PEV2","LUZ19","14-1"))
 CFU_wphage$Temp <- as.factor(CFU_wphage$Temp)
 
-ggplot(CFU_wphage, aes(hour, CFU_ml, colour = as.factor(Temp))) +
+
+# Set 0s to 1 so data can be plotted on log scale
+CFU_wphage <- CFU_wphage %>%
+  dplyr::mutate(standard_CFU_ml = ifelse(CFU_ml == 0, 1, CFU_ml))
+
+ggplot(CFU_wphage, aes(hour, standard_CFU_ml, colour = as.factor(Temp))) +
   geom_jitter(width = 0.2) +
   geom_line(aes(group = Temp), stat = "summary", fun = mean, size=0.8) +
   geom_errorbar(stat = "summary", fun.data = function(x) {
@@ -295,7 +298,6 @@ ggplot(CFU_wphage, aes(hour, CFU_ml, colour = as.factor(Temp))) +
   xlab("Time (hours)")+
   labs(colour="Temperature (C)")+
   scale_color_manual(values = c("#ffeda0","#feb24c","#fc4e2a"))+
-  #scale_colour_manual(values = c("#fde725", "#a0da39", "#277f8e","#440154"),labels=c("No phage",expression(phi*PEV2),expression(phi*LUZ19),expression(phi*'14-1')))+
   theme(legend.title = element_text(colour="black", size=11,face="bold"),legend.text = element_text(size=12),legend.text.align = 0)+
   theme(axis.title=element_text(size=11,face="bold"))+
   facet_grid(~Phage)
@@ -307,13 +309,20 @@ ggsave("Fig_S2.tiff")
 
 # Figure S3A
 
-BactOD <- read.csv("OD_readings.csv",fileEncoding="UTF-8-BOM")
+BactOD <- read_csv("OD_readings.csv",fileEncoding="UTF-8-BOM")
 
 BactOD$OD <- as.numeric(BactOD$OD)
 BactOD$Temp <- as.factor(BactOD$Temp)
 BactOD$Phage <- factor(BactOD$Phage, levels = c("14_1", "3-phage_cocktail", "LUZ19" ,"LUZ19_14-1" ,  "No_phage" ,   "PEV2" , "PEV2_14-1" , "PEV2_LUZ19"))
 
-nophage <- BactOD[(BactOD$Phage=="No_phage"),]
+nophage <- BactOD %>%
+  filter(Phage=="No_phage")
+
+# Model
+nophage_model <- lme(OD ~ Temp + time_point + Temp:time_point, random= ~1|Batch, data= nophage)
+
+summary(model)
+anova(model)
 
 nophage_OD <- ggplot(nophage, aes(hour, OD, colour = as.factor(Temp))) +
   geom_jitter(width = 0.2) +
@@ -330,19 +339,10 @@ nophage_OD <- ggplot(nophage, aes(hour, OD, colour = as.factor(Temp))) +
   theme(axis.title=element_text(size=12,face="bold"))
 
 
-## OD no phage stats
-
-## T1-5 OD no phage
-
-model <- lme(OD ~ Temp + time_point + Temp:time_point, random= ~1|Batch, data= nophage)
-
-summary(model)
-anova(model)
-
 
 # Figure S3B
 
-CFU_nophage <- read.csv("T0_T5_OD_CFU.csv",fileEncoding="UTF-8-BOM")
+CFU_nophage <- read_csv("T0_T5_CFU.csv")
 
 nophage_CFU <- ggplot(data=CFU_nophage, aes(x = as.factor(hour), y= CFU_ml, fill=as.factor(Temp))) + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1,lwd=1, alpha = 0.7,show.legend = F,position = position_dodge(width = .75))+
@@ -364,28 +364,23 @@ nophage_OD + nophage_CFU+ plot_layout(guides="collect")
 
 # No phage CFU stats
 
-CFU_nophage_T5 <- CFU_nophage[(CFU_nophage$hour=="5"),]
+CFU_nophage_T5 <- CFU_nophage %>%
+  filter(hour =="5")
 
-model <- lme(CFU_ml ~ Temp, random= ~1|Biol.rep, data= CFU_nophage_T5, weights = varIdent(form = ~1|Temp))
+model <- lme(CFU_ml ~ Temp, random= ~1|Biol_rep, data= CFU_nophage_T5, weights = varIdent(form = ~1|Temp))
 plot(model)
 summary(model)
 anova(model)
 emmeans(model, pairwise ~ Temp)
 
-
-# Specify data column
-group_mean<- aggregate(x= CFU_nophage$CFU_ml,
-                       # Specify group indicator
-                       by = list(CFU_nophage$hour, CFU_nophage$Temp),      
-                       # Specify function (i.e. mean)
-                       FUN = mean)
-print(group_mean)
+# Get number of bacterial doublings
+group_mean <- CFU_nophage %>%
+  dplyr::group_by(hour, Temp) %>%
+  dplyr::summarise(mean_value = mean(CFU_ml))
 
 group_mean %>%
-  filter(Group.1 %in% c(0, 5)) %>%
-  group_by(Group.2) %>%
-  summarize(Bacterial_doublings = log2(x[Group.1 == 5] / x[Group.1 == 0]))
-
+  dplyr::group_by(Temp) %>%
+  dplyr::summarise(Bacterial_doublings = log2(mean_value[hour == 5] / mean_value[hour == 0]))
 
 
 
@@ -399,7 +394,9 @@ decayrate_assay <- read.csv("Decay_rate_120523.csv",fileEncoding="UTF-8-BOM")
 decayrate_assay$PFU_ML <- as.numeric(decayrate_assay$PFU_ML)
 decayrate_assay$Time <- as.numeric(decayrate_assay$Time)
 decayrate_assay$Temp <- as.factor(decayrate_assay$Temp)
-decayrate_assay <- decayrate_assay[(decayrate_assay$Time<25),]
+
+decayrate_assay <- decayrate_assay %>%
+  filter(Time<25)
 
 decayrate_assay$Phage <- factor(decayrate_assay$Phage, levels=c("PEV2","LUZ19","phage14_1"), labels=c("PEV2","LUZ19","14-1"))
 
@@ -407,6 +404,73 @@ decayrate_assay$Phage <- factor(decayrate_assay$Phage, levels=c("PEV2","LUZ19","
 ## Survivorship stats
 
 # For survivorship and attachment stats, the 95% confidence intervals of time to 50% decay/adsorption was predicted from models
+
+decay_rate_data <- decayrate_assay %>%
+  mutate(rounded_pfu = round(PFU_ML)) %>%
+  group_by(Phage) %>%
+  nest()
+
+decay_rate_models <- decay_rate_data %>%
+  mutate(model = map(data, ~ glm(rounded_pfu ~ Time + Temp + Time:Temp, data= ., family="poisson")))%>%
+  mutate(model_summaries = map(model, summary))
+
+# Diagnostic plots
+length(decay_rate_models$model)
+
+plots <- lapply(1:3, function(i) plot(decay_rate_models$model[[i]], main = paste(decay_rate_models$Phage[[i]])))
+cowplot::plot_grid(plotlist = plots)
+
+decay_rate_models$model_summaries
+
+# Model preditions
+
+new_x <- seq(0, 100, 0.1)
+
+predict_for_temp <- function(model, temp, new_x) {
+  predict(model, 
+          newdata = data.frame(Time = new_x, Temp = factor(rep(temp, length(new_x)))),
+          type = "response", se.fit = TRUE)
+}
+
+decay_rate_models_predict <- decay_rate_models %>%
+  mutate(predictions_37C = map(model, ~ predict_for_temp(.x, "37", new_x)),
+         predictions_40C = map(model, ~ predict_for_temp(.x, "40", new_x)),
+         predictions_42C = map(model, ~ predict_for_temp(.x, "42", new_x))) %>%
+  select(Phage, predictions_37C, predictions_40C, predictions_42C) %>%
+  pivot_longer(
+    cols = starts_with("predictions"),
+    names_to = "temperature",
+    values_to = "predictions"
+  )
+
+unnested_models <- decay_rate_models_predict %>%
+  mutate(
+    fitted = map(predictions, "fit"),
+    se = map(predictions, "se.fit")
+  ) %>%
+  unnest(cols = c(fitted, se)) %>%
+  mutate(conf_int = se * 1.96) %>%
+  mutate(upper_fit = fitted + conf_int) %>%
+  mutate(lower_fit = fitted - conf_int)
+
+# phage starting densities
+
+decayrate_assay %>%
+  dplyr::group_by(Phage) %>%
+  dplyr::summarise(half_density = max(PFU_ML)/2)
+
+# Calculate time to 50% decay
+
+decay_rate_model_preds <- decay_rate_models %>%
+  mutate(predictions = )
+predslm <- predict(model,type = "response", se.fit=T)
+
+CFU_OD_regression <- CFU_OD_regression %>%
+  mutate(predictions = predslm$fit) %>%
+  mutate(se_fit = predslm$se.fit) %>%
+  mutate(conf_int = se_fit * 1.96) %>%
+  mutate(upper_fit = predictions + conf_int) %>%
+  mutate(lower_fit = predictions - conf_int)
 
 ## PEV2
 
