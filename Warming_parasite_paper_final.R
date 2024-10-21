@@ -510,17 +510,135 @@ ggsave("Fig_S4_update.tiff")
 
 adsorption_assay <- read.csv("Adsorption_assay_020523.csv",fileEncoding="UTF-8-BOM")
 
-adsorption_assay$PFU_ML <- as.numeric(adsorption_assay$PFU_ML)
-adsorption_assay$PFU_ML_round <- as.numeric(adsorption_assay$PFU_ML_round)
-adsorption_assay$Rel_PFU_ml<- as.numeric(adsorption_assay$Rel_PFU_ml)
-adsorption_assay$Time <- as.numeric(adsorption_assay$Time)
-adsorption_assay$Temp <- as.factor(adsorption_assay$Temp)
-adsorption_assay <- adsorption_assay[(adsorption_assay$Time<25),]
+adsorption_assay <- adsorption_assay %>%
+  mutate(across(c(PFU_ML, PFU_ML_round,Rel_PFU_ml,Time), as.numeric)) %>%
+  mutate(Temp = as.factor(Temp))
 
 adsorption_assay$Phage <- factor(adsorption_assay$Phage, levels=c("PEV2","LUZ19","phage14_1"), labels=c("PEV2","LUZ19","14-1"))
 
+adsorption_assay_filtered <- adsorption_assay %>%
+  filter((Phage %in% c("PEV2", "LUZ19") & Time < 25) |
+           (Phage == "14-1" & Time < 10))
+
 
 ## Attachment stats
+
+
+adsorption_rate_models <- adsorption_assay_filtered %>%
+  group_by(Phage) %>%
+  nest() %>%
+  mutate(model = map2(data, Phage, ~ {
+    if (.y %in% c("PEV2", "LUZ19")) {
+      glm(PFU_ML_round ~ Time + Temp + Time:Temp, data = ., family = "poisson")
+    } else {
+      lm(PFU_ML_round ~ Time + Temp + Time:Temp, data = .)
+    }
+  })) %>%
+  mutate(model_summaries = map(model, summary))
+
+
+
+# Diagnostic plots
+length(adsorption_rate_models_P_L$model)
+
+plots <- lapply(1:3, function(i) plot(adsorption_rate_models_P_L$model[[i]], main = paste(adsorption_rate_models$Phage[[i]])))
+cowplot::plot_grid(plotlist = plots)
+
+adsorption_rate_models$model_summaries
+
+# Model predictions between 1 and 100 hours
+
+new_x <- seq(0, 50, 0.1)
+
+predict_for_temp <- function(model, temp, new_x) {
+  predict(model, 
+          newdata = data.frame(Time = new_x, Temp = factor(rep(temp, length(new_x)))),
+          type = "response", se.fit = TRUE)
+}
+
+
+# PEV2 and LUZ19 GLMs
+adsorption_rate_models_predict <- adsorption_rate_models %>%
+  mutate(T37 = map(model, ~ predict_for_temp(.x, "37", new_x)),
+         T40 = map(model, ~ predict_for_temp(.x, "40", new_x)),
+         T42 = map(model, ~ predict_for_temp(.x, "42", new_x))) %>%
+  select(Phage, data, T37, T40, T42) %>%
+  pivot_longer(
+    cols = starts_with("T"),
+    names_to = "Temp",
+    values_to = "predictions"
+  )
+
+
+# Extract fitted values and calculate upper and lower confidence interval bounds
+
+model_data <- adsorption_rate_models_predict %>%
+  mutate(
+    fitted = map(predictions, "fit"),
+    se = map(predictions, "se.fit")
+  ) %>%
+  unnest(cols = c(fitted, se)) %>%
+  mutate(conf_int = se * 1.96,
+         upper_fit = fitted + conf_int,
+         lower_fit = fitted - conf_int,
+  ) %>%
+  dplyr::group_by(Phage, Temp) %>%
+  dplyr::mutate(Time = new_x) %>%
+  ungroup() %>%
+  dplyr::group_by(Phage) %>%
+  dplyr::mutate(half_dens = map(data, ~max(.x$PFU_ML_round/2))) %>% # Include the value when phage density has decreased by half
+  ungroup() %>%
+  select(Phage, Temp, fitted, se, upper_fit, lower_fit, half_dens, Time)
+
+model_data$Temp <- factor(model_data$Temp, levels=c("T37","T40", "T42"), labels=c("37","40","42"))
+
+
+# Calculate the time predicted for phage densities to decrease by 50% (50% attachment)
+# Note values are not provided for 14-1 37C as decay is expected to take longer than 1000 hours
+
+model_data %>%
+  group_by(Phage, Temp) %>%
+  filter(upper_fit > half_dens & lower_fit < half_dens) %>%
+  mutate(time_to_50 = paste(min(Time), "-", max(Time))) %>%
+  select(Phage, Temp, time_to_50) %>%
+  distinct()
+
+
+
+# Plot of phage decay
+
+model_for_plotting <- model_data %>%
+  filter(Time <= 25 & fitted > 0)
+
+data_for_plotting <- adsorption_assay %>%
+  filter(Time < 25)
+
+ggplot(data_for_plotting, aes(Time, PFU_ML, group = Temp)) +
+  geom_jitter(aes(shape = Temp, fill = Temp),width = 1, size=2.2,col = "black") +
+  geom_line(data = model_for_plotting, aes(y = fitted, color = Temp), size = 0.8,show.legend = FALSE) +
+  geom_ribbon(data = model_for_plotting, aes(x = Time, ymin = lower_fit, ymax = upper_fit, fill = Temp), alpha = 0.2, inherit.aes = FALSE) +
+  xlim(-2,25)+
+  #scale_y_continuous(trans='log10', limits = c(10^3,10^5)) +
+  #annotation_logticks(sides="l")+
+  #ylim(0,500000)+
+  ylab("Phage density (PFU/ml)") +
+  xlab("Time (hours)")+
+  labs(fill="Temperature (\u00B0C)")+
+  scale_color_manual(values = c("#ffeda0","#feb24c","#fc4e2a"), guide="none")+
+  scale_fill_manual(values = c("#ffeda0","#feb24c","#fc4e2a"))+
+  scale_shape_manual(values = c(23,21,24), guide="none")+
+  theme_bw() +
+  theme(legend.title = element_text(colour="black", size=11,face="bold"),legend.text = element_text(size=12))+
+  theme(axis.title=element_text(size=11,face="bold"))+
+  guides(fill = guide_legend(override.aes = list(shape=c(23,21,24)))) +
+  facet_grid(~ Phage)
+
+ggsave("Fig_S5_update.tiff")
+
+
+
+
+
 
 ## PEV2
 
