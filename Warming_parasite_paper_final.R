@@ -422,9 +422,9 @@ cowplot::plot_grid(plotlist = plots)
 
 decay_rate_models$model_summaries
 
-# Model preditions
+# Model predictions between 1 and 100 hours
 
-new_x <- seq(0, 100, 0.1)
+new_x <- seq(0, 1000, 0.1)
 
 predict_for_temp <- function(model, temp, new_x) {
   predict(model, 
@@ -433,298 +433,75 @@ predict_for_temp <- function(model, temp, new_x) {
 }
 
 decay_rate_models_predict <- decay_rate_models %>%
-  mutate(predictions_37C = map(model, ~ predict_for_temp(.x, "37", new_x)),
-         predictions_40C = map(model, ~ predict_for_temp(.x, "40", new_x)),
-         predictions_42C = map(model, ~ predict_for_temp(.x, "42", new_x))) %>%
-  select(Phage, predictions_37C, predictions_40C, predictions_42C) %>%
+  mutate(T37 = map(model, ~ predict_for_temp(.x, "37", new_x)),
+         T40 = map(model, ~ predict_for_temp(.x, "40", new_x)),
+         T42 = map(model, ~ predict_for_temp(.x, "42", new_x))) %>%
+  select(Phage, data, T37, T40, T42) %>%
   pivot_longer(
-    cols = starts_with("predictions"),
-    names_to = "temperature",
+    cols = starts_with("T"),
+    names_to = "Temp",
     values_to = "predictions"
   )
 
-unnested_models <- decay_rate_models_predict %>%
+
+# Extract fitted values and calculate upper and lower confidence interval bounds
+
+model_data <- decay_rate_models_predict %>%
   mutate(
     fitted = map(predictions, "fit"),
     se = map(predictions, "se.fit")
-  ) %>%
+    ) %>%
   unnest(cols = c(fitted, se)) %>%
-  mutate(conf_int = se * 1.96) %>%
-  mutate(upper_fit = fitted + conf_int) %>%
-  mutate(lower_fit = fitted - conf_int)
-
-# phage starting densities
-
-decayrate_assay %>%
+  mutate(conf_int = se * 1.96,
+         upper_fit = fitted + conf_int,
+         lower_fit = fitted - conf_int,
+         ) %>%
+  dplyr::group_by(Phage, Temp) %>%
+  dplyr::mutate(Time = new_x) %>%
+  ungroup() %>%
   dplyr::group_by(Phage) %>%
-  dplyr::summarise(half_density = max(PFU_ML)/2)
+  dplyr::mutate(half_dens = map(data, ~max(.x$PFU_ML/2))) %>% # Include the value when phage density has decreased by half
+  ungroup() %>%
+  select(Phage, Temp, fitted, se, upper_fit, lower_fit, half_dens, Time)
 
-# Calculate time to 50% decay
+model_data$Temp <- factor(model_data$Temp, levels=c("T37","T40", "T42"), labels=c("37","40","42"))
 
-decay_rate_model_preds <- decay_rate_models %>%
-  mutate(predictions = )
-predslm <- predict(model,type = "response", se.fit=T)
 
-CFU_OD_regression <- CFU_OD_regression %>%
-  mutate(predictions = predslm$fit) %>%
-  mutate(se_fit = predslm$se.fit) %>%
-  mutate(conf_int = se_fit * 1.96) %>%
-  mutate(upper_fit = predictions + conf_int) %>%
-  mutate(lower_fit = predictions - conf_int)
+# Calculate the time predicted for phage densities to decrease by 50%
+# Note values are not provided for 14-1 37C as decay is expected to take longer than 1000 hours
 
-## PEV2
+model_data %>%
+  group_by(Phage, Temp) %>%
+  filter(upper_fit > half_dens & lower_fit < half_dens) %>%
+  mutate(time_to_50 = paste(min(Time), "-", max(Time))) %>%
+  select(Phage, Temp, time_to_50) %>%
+  distinct()
 
-decayrate_assay_pev2 <- decayrate_assay[(decayrate_assay$Phage=="PEV2"),]
-max(decayrate_assay_pev2$PFU_ML)/2
 
-## Poisson GLM with interaction between Time and Temperature
-model <- glm(PFU_ML ~ Time + Temp + Time:Temp, data= decayrate_assay_pev2, family="poisson")
-plot(model)
+# Plot of phage decay
 
-summary(model)
+model_for_plotting <- model_data %>%
+  filter(Time <= 24)
 
-car::Anova(model, type=3)
-
-new_x <- seq(0, 100, 0.1)
-
-## PEV2 time to 50% decay at 37C
-
-PEV2_37C_50 <- predict(model, data.frame(Time = new_x, Temp = factor(rep("37", length(new_x)))),
-                       type = "response", se.fit=T)
-PEV2_37C_50$CI <- PEV2_37C_50$se.fit * 1.96
-PEV2_37C_50$Time <- new_x
-PEV2_37C_50 <- data.frame(PEV2_37C_50)
-PEV2_37C_50$upperfit <- PEV2_37C_50$fit + PEV2_37C_50$CI
-PEV2_37C_50$lowerfit <- PEV2_37C_50$fit - PEV2_37C_50$CI
-
-PEV2_37C_50[with(PEV2_37C_50, upperfit > 203333.3 & lowerfit < 203333.3),]
-
-## PEV2 time to 50% decay at 40C
-
-PEV2_40C_50 <- predict(model, data.frame(Time = new_x, Temp = factor(rep("40", length(new_x)))),
-                       type = "response", se.fit=T)
-PEV2_40C_50$CI <- PEV2_40C_50$se.fit * 1.96
-PEV2_40C_50$Time <- new_x
-PEV2_40C_50 <- data.frame(PEV2_40C_50)
-PEV2_40C_50$upperfit <- PEV2_40C_50$fit + PEV2_40C_50$CI
-PEV2_40C_50$lowerfit <- PEV2_40C_50$fit - PEV2_40C_50$CI
-
-PEV2_40C_50[with(PEV2_40C_50, upperfit > 203333.3 & lowerfit < 203333.3),]
-
-## PEV2 time to 50% decay at 42C
-
-PEV2_42C_50 <- predict(model, data.frame(Time = new_x, Temp = factor(rep("42", length(new_x)))),
-                       type = "response", se.fit=T)
-PEV2_42C_50$CI <- PEV2_42C_50$se.fit * 1.96
-PEV2_42C_50$Time <- new_x
-PEV2_42C_50 <- data.frame(PEV2_42C_50)
-PEV2_42C_50$upperfit <- PEV2_42C_50$fit + PEV2_42C_50$CI
-PEV2_42C_50$lowerfit <- PEV2_42C_50$fit - PEV2_42C_50$CI
-
-PEV2_42C_50[with(PEV2_42C_50, upperfit > 203333.3 & lowerfit < 203333.3),]
-
-## Plot
-
-predslm = predict(model, type = "response", se.fit=T)
-predslm$CI <- predslm$se.fit * 1.96
-predslm <- data.frame(predslm)
-predslm$upperfit <- predslm$fit + predslm$CI
-predslm$lowerfit <- predslm$fit - predslm$CI
-head(predslm)
-
-datlm = cbind(decayrate_assay_pev2, predslm)
-head(datlm)
-
-datlm$Temp <- as.factor(datlm$Temp)
-
-PEV2_decayrate <- ggplot(datlm, aes(Time, PFU_ML, group = Temp)) +
-  geom_ribbon( aes(ymin = lowerfit, ymax = upperfit, group = Temp), alpha = .15) +
-  geom_line( aes(y = fit, color = Temp), size = 0.8,show.legend = FALSE)+
+ggplot(decayrate_assay, aes(Time, PFU_ML, group = Temp)) +
   geom_jitter(aes(shape = Temp, fill = Temp),width = 1, size=2.2,col = "black") +
-  #scale_y_continuous(trans='log10', limits = c(10^3,10^5)) +
-  #annotation_logticks(sides="l")+
-  theme_bw()+
+  geom_line(data = model_for_plotting, aes(y = fitted, color = Temp), size = 0.8,show.legend = FALSE) +
+  geom_ribbon(data = model_for_plotting, aes(x = Time, ymin = lower_fit, ymax = upper_fit, fill = Temp), alpha = 0.2, inherit.aes = FALSE) +
   xlim(-2,26)+
-  ylim(0,500000)+
-  ylab("Free phage density (PFU/ml)") +
+  scale_y_continuous(trans='log10', limits = c(10^4,10^6)) +
+  annotation_logticks(sides="l")+
+  #ylim(0,500000)+
+  ylab("Phage density (PFU/ml)") +
   xlab("Time (hours)")+
   labs(fill="Temperature (\u00B0C)")+
   scale_color_manual(values = c("#ffeda0","#feb24c","#fc4e2a"), guide="none")+
   scale_fill_manual(values = c("#ffeda0","#feb24c","#fc4e2a"))+
   scale_shape_manual(values = c(23,21,24), guide="none")+
+  theme_bw() +
   theme(legend.title = element_text(colour="black", size=11,face="bold"),legend.text = element_text(size=12))+
   theme(axis.title=element_text(size=11,face="bold"))+
-  guides(fill = guide_legend(override.aes = list(shape=c(23,21,24))))
-
-
-## LUZ19
-
-#Stats
-decayrate_assay_luz19 <- decayrate_assay[(decayrate_assay$Phage=="LUZ19"),]
-max(decayrate_assay_luz19$PFU_ML)/2
-
-## Poisson GLM with interaction between Time and Temperature
-model <- glm(PFU_ML ~ Time + Temp + Time:Temp, data= decayrate_assay_luz19, family="poisson")
-plot(model)
-
-summary(model)
-
-car::Anova(model, type=3)
-
-new_x <- seq(0, 100, 0.1)
-
-## LUZ19 time to 50% decay at 37C
-LUZ19_37C_50 <- predict(model, data.frame(Time = new_x, Temp = factor(rep("37", length(new_x)))),
-                        type = "response", se.fit=T)
-LUZ19_37C_50$CI <- LUZ19_37C_50$se.fit * 1.96
-LUZ19_37C_50$Time <- new_x
-LUZ19_37C_50 <- data.frame(LUZ19_37C_50)
-LUZ19_37C_50$upperfit <- LUZ19_37C_50$fit + LUZ19_37C_50$CI
-LUZ19_37C_50$lowerfit <- LUZ19_37C_50$fit - LUZ19_37C_50$CI
-
-LUZ19_37C_50[with(LUZ19_37C_50, upperfit > 95000 & lowerfit < 95000),]
-
-## LUZ19 time to 50% decay at 40C
-LUZ19_40C_50 <- predict(model, data.frame(Time = new_x, Temp = factor(rep("40", length(new_x)))),
-                        type = "response", se.fit=T)
-LUZ19_40C_50$CI <- LUZ19_40C_50$se.fit * 1.96
-LUZ19_40C_50$Time <- new_x
-LUZ19_40C_50 <- data.frame(LUZ19_40C_50)
-LUZ19_40C_50$upperfit <- LUZ19_40C_50$fit + LUZ19_40C_50$CI
-LUZ19_40C_50$lowerfit <- LUZ19_40C_50$fit - LUZ19_40C_50$CI
-
-LUZ19_40C_50[with(LUZ19_40C_50, upperfit > 95000 & lowerfit < 95000),]
-
-## LUZ19 time to 50% decay at 42C
-LUZ19_42C_50 <- predict(model, data.frame(Time = new_x, Temp = factor(rep("42", length(new_x)))),
-                        type = "response", se.fit=T)
-LUZ19_42C_50$CI <- LUZ19_42C_50$se.fit * 1.96
-LUZ19_42C_50$Time <- new_x
-LUZ19_42C_50 <- data.frame(LUZ19_42C_50)
-LUZ19_42C_50$upperfit <- LUZ19_42C_50$fit + LUZ19_42C_50$CI
-LUZ19_42C_50$lowerfit <- LUZ19_42C_50$fit - LUZ19_42C_50$CI
-
-LUZ19_42C_50[with(LUZ19_42C_50, upperfit > 95000 & lowerfit < 95000),]
-
-## Plot
-
-predslm = predict(model, type = "response", se.fit=T)
-predslm$CI <- predslm$se.fit * 1.96
-predslm <- data.frame(predslm)
-predslm$upperfit <- predslm$fit + predslm$CI
-predslm$lowerfit <- predslm$fit - predslm$CI
-head(predslm)
-
-datlm = cbind(decayrate_assay_luz19, predslm)
-head(datlm)
-
-LUZ19_decayrate <- ggplot(datlm, aes(Time, PFU_ML, group = Temp)) +
-  geom_ribbon( aes(ymin = lowerfit, ymax = upperfit, group = Temp), alpha = .15) +
-  geom_line( aes(y = fit, color = Temp), size = 0.8,show.legend = FALSE)+
-  geom_jitter(aes(shape = Temp, fill = Temp),width = 1, size=2.2,col = "black") +
-  #scale_y_continuous(trans='log10', limits = c(10^3,10^5)) +
-  #annotation_logticks(sides="l")+
-  theme_bw()+
-  xlim(-2,26)+
-  ylim(0,500000)+
-  ylab("") +
-  xlab("Time (hours)")+
-  labs(fill="Temperature (\u00B0C)")+
-  scale_color_manual(values = c("#ffeda0","#feb24c","#fc4e2a"), guide="none")+
-  scale_fill_manual(values = c("#ffeda0","#feb24c","#fc4e2a"))+
-  scale_shape_manual(values = c(23,21,24), guide="none")+
-  theme(legend.title = element_text(colour="black", size=11,face="bold"),legend.text = element_text(size=12))+
-  theme(axis.title=element_text(size=11,face="bold"))+
-  guides(fill = guide_legend(override.aes = list(shape=c(23,21,24))))
-
-
-## 14-1
-
-decayrate_assay_14 <- decayrate_assay[(decayrate_assay$Phage=="14-1"),]
-max(decayrate_assay_14$PFU_ML)/2
-
-## Poisson GLM with interaction between Time and Temperature
-model <- glm(PFU_ML ~ Time + Temp + Time:Temp, data= decayrate_assay_14, family="poisson")
-plot(model)
-
-summary(model)
-
-car::Anova(model, type=3)
-
-new_x <- seq(0, 5000, 0.1)
-
-## 14-1 time to 50% decay at 37C
-phage14_37C_50 <- predict(model, data.frame(Time = new_x, Temp = factor(rep("37", length(new_x)))),
-                          type = "response", se.fit=T)
-phage14_37C_50$CI <- phage14_37C_50$se.fit * 1.96
-phage14_37C_50$Time <- new_x
-phage14_37C_50 <- data.frame(phage14_37C_50)
-phage14_37C_50$upperfit <- phage14_37C_50$fit + phage14_37C_50$CI
-phage14_37C_50$lowerfit <- phage14_37C_50$fit - phage14_37C_50$CI
-
-dat <- phage14_37C_50[with(phage14_37C_50, upperfit > (2*10^5) & lowerfit < (2*10^5)),]
-min(dat$Time)
-phage14_37C_50[with(phage14_37C_50, upperfit > 200000 & lowerfit < 200000),]
-
-
-## 14-1 time to 50% decay at 40C
-phage14_40C_50 <- predict(model, data.frame(Time = new_x, Temp = factor(rep("40", length(new_x)))),
-                          type = "response", se.fit=T)
-phage14_40C_50$CI <- phage14_40C_50$se.fit * 1.96
-phage14_40C_50$Time <- new_x
-phage14_40C_50 <- data.frame(phage14_40C_50)
-phage14_40C_50$upperfit <- phage14_40C_50$fit + phage14_40C_50$CI
-phage14_40C_50$lowerfit <- phage14_40C_50$fit - phage14_40C_50$CI
-
-dat <- phage14_40C_50[with(phage14_40C_50, upperfit > (2*10^5) & lowerfit < (2*10^5)),]
-min(dat$Time)
-max(dat$Time)
-phage14_40C_50[with(phage14_40C_50, upperfit > 200000 & lowerfit < 200000),]
-
-## 14-1 time to 50% decay at 42C
-phage14_42C_50 <- predict(model, data.frame(Time = new_x, Temp = factor(rep("42", length(new_x)))),
-                          type = "response", se.fit=T)
-phage14_42C_50$CI <- phage14_42C_50$se.fit * 1.96
-phage14_42C_50$Time <- new_x
-phage14_42C_50 <- data.frame(phage14_42C_50)
-phage14_42C_50$upperfit <- phage14_42C_50$fit + phage14_42C_50$CI
-phage14_42C_50$lowerfit <- phage14_42C_50$fit - phage14_42C_50$CI
-
-dat <- phage14_42C_50[with(phage14_42C_50, upperfit > 200000 & lowerfit < 200000),]
-min(dat$Time)
-max(dat$Time)
-
-## Plot
-
-predslm = predict(model, type = "response", se.fit=T)
-predslm$CI <- predslm$se.fit * 1.96
-predslm <- data.frame(predslm)
-predslm$upperfit <- predslm$fit + predslm$CI
-predslm$lowerfit <- predslm$fit - predslm$CI
-head(predslm)
-
-datlm = cbind(decayrate_assay_14, predslm)
-
-phage14_decay <- ggplot(datlm, aes(Time, PFU_ML, group = Temp)) +
-  geom_ribbon( aes(ymin = lowerfit, ymax = upperfit, group = Temp), alpha = .15) +
-  geom_line( aes(y = fit, color = Temp), size = 0.8,show.legend = FALSE)+
-  geom_jitter(aes(shape = Temp, fill = Temp),width = 1, size=2.2,col = "black") +
-  #scale_y_continuous(trans='log10', limits = c(10^3,10^5)) +
-  #annotation_logticks(sides="l")+
-  theme_bw()+
-  xlim(-2,26)+
-  ylim(0,500000)+
-  ylab("") +
-  xlab("Time (hours)")+
-  labs(fill="Temperature (\u00B0C)")+
-  scale_color_manual(values = c("#ffeda0","#feb24c","#fc4e2a"), guide="none")+
-  scale_fill_manual(values = c("#ffeda0","#feb24c","#fc4e2a"))+
-  scale_shape_manual(values = c(23,21,24), guide="none")+
-  theme(legend.title = element_text(colour="black", size=11,face="bold"),legend.text = element_text(size=12))+
-  theme(axis.title=element_text(size=11,face="bold"))+
-  guides(fill = guide_legend(override.aes = list(shape=c(23,21,24))))
-
-PEV2_decayrate + LUZ19_decayrate+ phage14_decay + plot_layout(guides="collect")
+  guides(fill = guide_legend(override.aes = list(shape=c(23,21,24)))) +
+  facet_grid(~ Phage)
 
 ggsave("Fig_S4_update.tiff")
 
