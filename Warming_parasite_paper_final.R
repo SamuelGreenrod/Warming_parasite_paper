@@ -605,7 +605,7 @@ model_data %>%
 
 
 
-# Plot of phage decay
+# Plot of phage adsorption
 
 model_for_plotting <- model_data %>%
   filter(Time <= 25 & fitted > 0)
@@ -639,88 +639,60 @@ ggsave("Fig_S5_update.tiff")
 
 ## Figure 2A - Radar charts showing life-history traits
 
-suppressPackageStartupMessages(library(dplyr))
+radar <- read_csv("Radar_charts_correct_new.csv")
 
-radar <- read.csv("Radar_charts_correct_new.csv",fileEncoding="UTF-8-BOM")
+radar_rename <- radar %>%
+  select(Phage, Temperature, Decay_prop, Recip_adsorption_time_prop, log_T5_T0_PFU_prop_norm, log_T5_T0_CFU_prop_norm) %>%
+  rename("Stability" = Decay_prop,
+         "Host_attachment" = Recip_adsorption_time_prop,
+         "Reproductive_capacity" = log_T5_T0_PFU_prop_norm,
+         "Virulence" = log_T5_T0_CFU_prop_norm)
 
-pev2_radar <- radar[(radar$Phage=="PEV2"),]
-pev2_radar <- subset(pev2_radar, select = c("Temperature","Decay_prop","Recip_adsorption_time_prop","log_T5_T0_PFU_prop_norm","log_T5_T0_CFU_prop_norm") )
-colnames(pev2_radar) <- c("Temperature","Stability" , "Host attachment" , "Reproductive capacity" , "Virulence")
+radar_rename <- radar_rename %>%
+  mutate(across(c(Stability, Host_attachment,Reproductive_capacity,Virulence), as.numeric))
 
-luz19_radar <- radar[(radar$Phage=="LUZ19"),]
-luz19_radar <- subset(luz19_radar, select = c("Temperature","Decay_prop","Recip_adsorption_time_prop","log_T5_T0_PFU_prop_norm","log_T5_T0_CFU_prop_norm") )
-colnames(luz19_radar) <- c("Temperature","Stability" , "Host attachment" , "Reproductive capacity" , "Virulence")
 
-phage14_radar <- radar[(radar$Phage=="phage14"),]
-phage14_radar <- subset(phage14_radar, select = c("Temperature","Decay_prop","Recip_adsorption_time_prop","log_T5_T0_PFU_prop_norm","log_T5_T0_CFU_prop_norm") )
-colnames(phage14_radar) <- c("Temperature","Stability" , "Host attachment" , "Reproductive capacity" , "Virulence")
+# Make radar plots
 
-pev2radar <- ggradar(pev2_radar, values.radar = c(0, 0.5, 1),
-        background.circle.colour = "grey90",
-        axis.line.colour = "gray60",
-        plot.extent.x.sf =1.2,
-        gridline.min.colour = "gray60",
-        gridline.mid.colour = "gray60",
-        gridline.max.colour = "gray60",
-        gridline.min.linetype = 1,
-        gridline.max.linetype = 1,
-        axis.label.size = 4, 
-        grid.label.size = 3)+
-  scale_color_manual(values = c("#ffeda0","#feb24c","#fc4e2a"))
+radar_rename %>%
+  dplyr::group_by(Phage) %>%
+  dplyr::group_map(~ {
 
-ggsave("pev2_radar.tiff")
+    p <- ggradar(., 
+                values.radar = c(0, 0.5, 1),
+                background.circle.colour = "grey90",
+                axis.line.colour = "gray60",
+                plot.extent.x.sf =1.2,
+                gridline.min.colour = "gray60",
+                gridline.mid.colour = "gray60",
+                gridline.max.colour = "gray60",
+                gridline.min.linetype = 1,
+                gridline.max.linetype = 1,
+                axis.label.size = 4, 
+                grid.label.size = 3)+
+      scale_color_manual(values = c("#ffeda0","#feb24c","#fc4e2a"))
+    
+    # Save the plot
+    ggsave(filename = paste0("plot_", unique(.y$Phage), ".tiff"), plot = p, width = 8, height = 5)
+  })
 
-luz19radar <- ggradar(luz19_radar, values.radar = c(0, 0.5, 1),
-        background.circle.colour = "grey90",
-        axis.line.colour = "gray60",
-        plot.extent.x.sf =1.2,
-        gridline.min.colour = "gray60",
-        gridline.mid.colour = "gray60",
-        gridline.max.colour = "gray60",
-        gridline.min.linetype = 1,
-        gridline.max.linetype = 1,
-        axis.label.size = 4, 
-        grid.label.size = 3)+
-  scale_color_manual(values = c("#ffeda0","#feb24c","#fc4e2a"))
-
-ggsave("luz19_radar.tiff")
-
-phage14radar <- ggradar(phage14_radar, values.radar = c(0, 0.5, 1),
-        background.circle.colour = "grey90",
-        axis.line.colour = "gray60",
-        plot.extent.x.sf =1.2,
-        gridline.min.colour = "gray60",
-        gridline.mid.colour = "gray60",
-        gridline.max.colour = "gray60",
-        gridline.min.linetype = 1,
-        gridline.max.linetype = 1,
-        axis.label.size = 4, 
-        grid.label.size = 3)+
-  scale_color_manual(values = c("#ffeda0","#feb24c","#fc4e2a"))
-
-ggsave("phage14_radar.tiff")
 
 
 ### Figure 2B - Correlation plot of virulence and population growth at T2
 
 radar$Temperature <- as.factor(radar$Temperature)
-
 radar$Temperature <- factor(radar$Temperature, levels = c("37","40","42"), labels = c("37°C","40°C","42°C"))
-
 radar$Phage <- factor(radar$Phage, levels=c("PEV2", "LUZ19", "phage14"), labels= c(expression('\u03d5PEV2'), expression("\u03d5LUZ19"), expression("\u03d514-1")))
 
 
 ggplot(radar,aes(x=Log_average_ratio_T2_and_T0_CFU,y=Log_average_ratio_T2_and_T0_PFU, group=Phage))+ 
   geom_point(aes(shape = Phage, fill = Temperature), col="black",size=5)+
-  #geom_path(aes(x = Average_ratio_T2_and_T0_CFU, y = Average_ratio_T2_and_T0_DNA_conc, group = Phage), 
-  #arrow = arrow(length = unit(0.35, "cm")), col="darkgrey")+
   geom_errorbar(aes(ymin=Log_average_ratio_T2_and_T0_PFU-Log_average_ratio_T2_and_T0_PFU_SE, ymax=Log_average_ratio_T2_and_T0_PFU+Log_average_ratio_T2_and_T0_PFU_SE), width=.01,col="darkgrey",
                 position=position_dodge(.01)) +
   geom_errorbar(aes(xmin=Log_average_ratio_T2_and_T0_CFU-Log_average_ratio_T2_and_T0_CFU_SE, xmax=Log_average_ratio_T2_and_T0_CFU + Log_average_ratio_T2_and_T0_CFU_SE), height=.03,col="darkgrey",
                 position=position_dodge(.01)) +
   ylab("Phage population growth (phage doublings after 2h)")+
   xlab("Phage virulence (bacterial doublings after 2h)") +
-  #ylim(-10,100)+
   scale_x_reverse()+
   theme_bw()+
   geom_vline(xintercept=0, linetype="dashed", color = "grey")+
@@ -737,701 +709,79 @@ ggsave("Fig_2B.tiff")
 
 # T5 virulence stats
 
-# PEV2 - 37C
-CFU_wphage_P <- CFU_wphage[(CFU_wphage$Phage=="PEV2"),]
-CFU_wphage_P_37 <- CFU_wphage_P[(CFU_wphage_P$Temp=="37"),]
+CFU_wphage <- read_csv("CFU_sodiumcitrate.csv")
 
-T0_P <- CFU_wphage_P_37[(CFU_wphage_P_37$hour<1),]
-T0_P_se <- sd(T0_P$CFU_ml)/sqrt(length((T0_P$CFU_ml)))
-T5_P <- CFU_wphage_P_37[(CFU_wphage_P_37$hour==5),]
-T5_P_se <- sd(T5_P$CFU_ml)/sqrt(length((T5_P$CFU_ml)))
+CFU_wphage$Phage <- factor(CFU_wphage$Phage, levels=c("No_phage","pev2","luz19","14_1"), labels=c("No phage","PEV2","LUZ19","14-1"))
+CFU_wphage$Temp <- as.factor(CFU_wphage$Temp)
 
-# Mean
-T5_P_mean <- mean(T5_P$CFU_ml)
-T0_P_mean <- mean(T0_P$CFU_ml)
-fraccalc <- log2(T5_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T5_P_se^2)/(T5_P_mean^2)))
-P_frac_SE
-
-
-# PEV2 - 40C
-CFU_wphage_P <- CFU_wphage[(CFU_wphage$Phage=="PEV2"),]
-CFU_wphage_P_40 <- CFU_wphage_P[(CFU_wphage_P$Temp=="40"),]
-
-T0_P <- CFU_wphage_P_40[(CFU_wphage_P_40$hour<1),]
-T0_P_se <- sd(T0_P$CFU_ml)/sqrt(length((T0_P$CFU_ml)))
-T5_P <- CFU_wphage_P_40[(CFU_wphage_P_40$hour==5),]
-T5_P_se <- sd(T5_P$CFU_ml)/sqrt(length((T5_P$CFU_ml)))
-
-# Mean
-T5_P_mean <- mean(T5_P$CFU_ml)
-T0_P_mean <- mean(T0_P$CFU_ml)
-fraccalc <- log2(T5_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T5_P_se^2)/(T5_P_mean^2)))
-P_frac_SE
-
-# PEV2 - 42C
-CFU_wphage_P <- CFU_wphage[(CFU_wphage$Phage=="PEV2"),]
-CFU_wphage_P_42 <- CFU_wphage_P[(CFU_wphage_P$Temp=="42"),]
-
-T0_P <- CFU_wphage_P_42[(CFU_wphage_P_42$hour<1),]
-T0_P_se <- sd(T0_P$CFU_ml)/sqrt(length((T0_P$CFU_ml)))
-T5_P <- CFU_wphage_P_42[(CFU_wphage_P_42$hour==5),]
-T5_P_se <- sd(T5_P$CFU_ml)/sqrt(length((T5_P$CFU_ml)))
-
-# Mean
-T5_P_mean <- mean(T5_P$CFU_ml)
-T0_P_mean <- mean(T0_P$CFU_ml)
-fraccalc <- log2(T5_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T5_P_se^2)/(T5_P_mean^2)))
-P_frac_SE
-
-
-# LUZ19 - 37C
-CFU_wphage_L <- CFU_wphage[(CFU_wphage$Phage=="LUZ19"),]
-CFU_wphage_L_37 <- CFU_wphage_L[(CFU_wphage_L$Temp=="37"),]
-
-T0_L <- CFU_wphage_L_37[(CFU_wphage_L_37$hour<1),]
-T0_L_se <- sd(T0_L$CFU_ml)/sqrt(length((T0_L$CFU_ml)))
-T5_L <- CFU_wphage_L_37[(CFU_wphage_L_37$hour==5),]
-T5_L_se <- sd(T5_L$CFU_ml)/sqrt(length((T5_L$CFU_ml)))
-
-# Mean
-T5_L_mean <- mean(T5_L$CFU_ml)
-T0_L_mean <- mean(T0_L$CFU_ml)
-fraccalc <- log2(T5_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T5_L_se^2)/(T5_L_mean^2)))
-L_frac_SE
-
-
-# LUZ19 - 40C
-CFU_wphage_L <- CFU_wphage[(CFU_wphage$Phage=="LUZ19"),]
-CFU_wphage_L_40 <- CFU_wphage_L[(CFU_wphage_L$Temp=="40"),]
-
-T0_L <- CFU_wphage_L_40[(CFU_wphage_L_40$hour<1),]
-T0_L_se <- sd(T0_L$CFU_ml)/sqrt(length((T0_L$CFU_ml)))
-T5_L <- CFU_wphage_L_40[(CFU_wphage_L_40$hour==5),]
-T5_L_se <- sd(T5_L$CFU_ml)/sqrt(length((T5_L$CFU_ml)))
-
-# Mean
-T5_L_mean <- mean(T5_L$CFU_ml)
-T0_L_mean <- mean(T0_L$CFU_ml)
-fraccalc <- log2(T5_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T5_L_se^2)/(T5_L_mean^2)))
-L_frac_SE
-
-# LUZ19 - 42C
-CFU_wphage_L <- CFU_wphage[(CFU_wphage$Phage=="LUZ19"),]
-CFU_wphage_L_42 <- CFU_wphage_L[(CFU_wphage_L$Temp=="42"),]
-
-T0_L <- CFU_wphage_L_42[(CFU_wphage_L_42$hour<1),]
-T0_L_se <- sd(T0_L$CFU_ml)/sqrt(length((T0_L$CFU_ml)))
-T5_L <- CFU_wphage_L_42[(CFU_wphage_L_42$hour==5),]
-T5_L_se <- sd(T5_L$CFU_ml)/sqrt(length((T5_L$CFU_ml)))
-
-# Mean
-T5_L_mean <- mean(T5_L$CFU_ml)
-T0_L_mean <- mean(T0_L$CFU_ml)
-fraccalc <- log2(T5_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T5_L_se^2)/(T5_L_mean^2)))
-L_frac_SE
-
-
-# 14-1 - 37C
-CFU_wphage_14 <- CFU_wphage[(CFU_wphage$Phage=="14-1"),]
-CFU_wphage_14_37 <- CFU_wphage_14[(CFU_wphage_14$Temp=="37"),]
-
-T0_14 <- CFU_wphage_14_37[(CFU_wphage_14_37$hour<1),]
-T0_14_se <- sd(T0_14$CFU_ml)/sqrt(length((T0_14$CFU_ml)))
-T5_14 <- CFU_wphage_14_37[(CFU_wphage_14_37$hour==5),]
-T5_14_se <- sd(T5_14$CFU_ml)/sqrt(length((T5_14$CFU_ml)))
-
-# Mean
-T5_14_mean <- mean(T5_14$CFU_ml)
-T0_14_mean <- mean(T0_14$CFU_ml)
-fraccalc <- log2(T5_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T5_14_se^2)/(T5_14_mean^2)))
-phage14_frac_SE
-
-
-# 14-1 - 40C
-CFU_wphage_14 <- CFU_wphage[(CFU_wphage$Phage=="14-1"),]
-CFU_wphage_14_40 <- CFU_wphage_14[(CFU_wphage_14$Temp=="40"),]
-
-T0_14 <- CFU_wphage_14_40[(CFU_wphage_14_40$hour<1),]
-T0_14_se <- sd(T0_14$CFU_ml)/sqrt(length((T0_14$CFU_ml)))
-T5_14 <- CFU_wphage_14_40[(CFU_wphage_14_40$hour==5),]
-T5_14_se <- sd(T5_14$CFU_ml)/sqrt(length((T5_14$CFU_ml)))
-
-# Mean
-T5_14_mean <- mean(T5_14$CFU_ml)
-T0_14_mean <- mean(T0_14$CFU_ml)
-fraccalc <- log2(T5_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T5_14_se^2)/(T5_14_mean^2)))
-phage14_frac_SE
-
-# 14-1 - 42C
-CFU_wphage_14 <- CFU_wphage[(CFU_wphage$Phage=="14-1"),]
-CFU_wphage_14_42 <- CFU_wphage_14[(CFU_wphage_14$Temp=="42"),]
-
-T0_14 <- CFU_wphage_14_42[(CFU_wphage_14_42$hour<1),]
-T0_14_se <- sd(T0_14$CFU_ml)/sqrt(length((T0_14$CFU_ml)))
-T5_14 <- CFU_wphage_14_42[(CFU_wphage_14_42$hour==5),]
-T5_14_se <- sd(T5_14$CFU_ml)/sqrt(length((T5_14$CFU_ml)))
-
-# Mean
-T5_14_mean <- mean(T5_14$CFU_ml)
-T0_14_mean <- mean(T0_14$CFU_ml)
-fraccalc <- log2(T5_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T5_14_se^2)/(T5_14_mean^2)))
-phage14_frac_SE
+CFU_group <- CFU_wphage %>%
+  filter(hour < 1 | hour == 5, Phage != "No phage") %>%
+  group_by(Phage, Temp, hour) %>%
+  summarise(mean = mean(CFU_ml, na.rm = TRUE),
+            se = sd(CFU_ml, na.rm = TRUE) / sqrt(n()))
+  
+CFU_group %>%
+  pivot_wider(names_from = hour, values_from = c(mean, se)) %>%
+  mutate(mean_ratio = log2(mean_5/mean_0),
+         se_ratio = sqrt(((se_0^2)/(mean_0^2)) + ((se_5^2)/(mean_5^2)))) %>%
+  select(Phage, Temp, mean_ratio, se_ratio)
 
 
 # Virulence stats after 2h
 
-# PEV2 - 37C
-CFU_wphage_P <- CFU_wphage[(CFU_wphage$Phage=="PEV2"),]
-CFU_wphage_P_37 <- CFU_wphage_P[(CFU_wphage_P$Temp=="37"),]
+CFU_group <- CFU_wphage %>%
+  filter(hour < 1 | hour == 2, Phage != "No phage") %>%
+  group_by(Phage, Temp, hour) %>%
+  summarise(mean = mean(CFU_ml, na.rm = TRUE),
+            se = sd(CFU_ml, na.rm = TRUE) / sqrt(n()))
 
-T0_P <- CFU_wphage_P_37[(CFU_wphage_P_37$hour<1),]
-T0_P_se <- sd(T0_P$CFU_ml)/sqrt(length((T0_P$CFU_ml)))
-T2_P <- CFU_wphage_P_37[(CFU_wphage_P_37$hour==2),]
-T2_P_se <- sd(T2_P$CFU_ml)/sqrt(length((T2_P$CFU_ml)))
+CFU_group %>%
+  pivot_wider(names_from = hour, values_from = c(mean, se)) %>%
+  mutate(mean_ratio = log2(mean_2/mean_0),
+         se_ratio = sqrt(((se_0^2)/(mean_0^2)) + ((se_2^2)/(mean_2^2)))) %>%
+  select(Phage, Temp, mean_ratio, se_ratio)
 
-# Mean
-T2_P_mean <- mean(T2_P$CFU_ml)
-T0_P_mean <- mean(T0_P$CFU_ml)
-fraccalc <- log2(T2_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T2_P_se^2)/(T2_P_mean^2)))
-P_frac_SE
-
-
-# PEV2 - 40C
-CFU_wphage_P <- CFU_wphage[(CFU_wphage$Phage=="PEV2"),]
-CFU_wphage_P_40 <- CFU_wphage_P[(CFU_wphage_P$Temp=="40"),]
-
-T0_P <- CFU_wphage_P_40[(CFU_wphage_P_40$hour<1),]
-T0_P_se <- sd(T0_P$CFU_ml)/sqrt(length((T0_P$CFU_ml)))
-T2_P <- CFU_wphage_P_40[(CFU_wphage_P_40$hour==2),]
-T2_P_se <- sd(T2_P$CFU_ml)/sqrt(length((T2_P$CFU_ml)))
-
-# Mean
-T2_P_mean <- mean(T2_P$CFU_ml)
-T0_P_mean <- mean(T0_P$CFU_ml)
-fraccalc <- log2(T2_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T2_P_se^2)/(T2_P_mean^2)))
-P_frac_SE
-
-# PEV2 - 42C
-CFU_wphage_P <- CFU_wphage[(CFU_wphage$Phage=="PEV2"),]
-CFU_wphage_P_42 <- CFU_wphage_P[(CFU_wphage_P$Temp=="42"),]
-
-T0_P <- CFU_wphage_P_42[(CFU_wphage_P_42$hour<1),]
-T0_P_se <- sd(T0_P$CFU_ml)/sqrt(length((T0_P$CFU_ml)))
-T2_P <- CFU_wphage_P_42[(CFU_wphage_P_42$hour==2),]
-T2_P_se <- sd(T2_P$CFU_ml)/sqrt(length((T2_P$CFU_ml)))
-
-# Mean
-T2_P_mean <- mean(T2_P$CFU_ml)
-T0_P_mean <- mean(T0_P$CFU_ml)
-fraccalc <- log2(T2_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T2_P_se^2)/(T2_P_mean^2)))
-P_frac_SE
-
-
-# LUZ19 - 37C
-CFU_wphage_L <- CFU_wphage[(CFU_wphage$Phage=="LUZ19"),]
-CFU_wphage_L_37 <- CFU_wphage_L[(CFU_wphage_L$Temp=="37"),]
-
-T0_L <- CFU_wphage_L_37[(CFU_wphage_L_37$hour<1),]
-T0_L_se <- sd(T0_L$CFU_ml)/sqrt(length((T0_L$CFU_ml)))
-T2_L <- CFU_wphage_L_37[(CFU_wphage_L_37$hour==2),]
-T2_L_se <- sd(T2_L$CFU_ml)/sqrt(length((T2_L$CFU_ml)))
-
-# Mean
-T2_L_mean <- mean(T2_L$CFU_ml)
-T0_L_mean <- mean(T0_L$CFU_ml)
-fraccalc <- log2(T2_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T2_L_se^2)/(T2_L_mean^2)))
-L_frac_SE
-
-
-# LUZ19 - 40C
-CFU_wphage_L <- CFU_wphage[(CFU_wphage$Phage=="LUZ19"),]
-CFU_wphage_L_40 <- CFU_wphage_L[(CFU_wphage_L$Temp=="40"),]
-
-T0_L <- CFU_wphage_L_40[(CFU_wphage_L_40$hour<1),]
-T0_L_se <- sd(T0_L$CFU_ml)/sqrt(length((T0_L$CFU_ml)))
-T2_L <- CFU_wphage_L_40[(CFU_wphage_L_40$hour==2),]
-T5_L_se <- sd(T2_L$CFU_ml)/sqrt(length((T2_L$CFU_ml)))
-
-# Mean
-T5_L_mean <- mean(T2_L$CFU_ml)
-T0_L_mean <- mean(T0_L$CFU_ml)
-fraccalc <- log2(T2_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T2_L_se^2)/(T2_L_mean^2)))
-L_frac_SE
-
-# LUZ19 - 42C
-CFU_wphage_L <- CFU_wphage[(CFU_wphage$Phage=="LUZ19"),]
-CFU_wphage_L_42 <- CFU_wphage_L[(CFU_wphage_L$Temp=="42"),]
-
-T0_L <- CFU_wphage_L_42[(CFU_wphage_L_42$hour<1),]
-T0_L_se <- sd(T0_L$CFU_ml)/sqrt(length((T0_L$CFU_ml)))
-T2_L <- CFU_wphage_L_42[(CFU_wphage_L_42$hour==2),]
-T2_L_se <- sd(T2_L$CFU_ml)/sqrt(length((T2_L$CFU_ml)))
-
-# Mean
-T5_L_mean <- mean(T2_L$CFU_ml)
-T0_L_mean <- mean(T0_L$CFU_ml)
-fraccalc <- log2(T2_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T2_L_se^2)/(T2_L_mean^2)))
-L_frac_SE
-
-
-# 14-1 - 37C
-CFU_wphage_14 <- CFU_wphage[(CFU_wphage$Phage=="14-1"),]
-CFU_wphage_14_37 <- CFU_wphage_14[(CFU_wphage_14$Temp=="37"),]
-
-T0_14 <- CFU_wphage_14_37[(CFU_wphage_14_37$hour<1),]
-T0_14_se <- sd(T0_14$CFU_ml)/sqrt(length((T0_14$CFU_ml)))
-T2_14 <- CFU_wphage_14_37[(CFU_wphage_14_37$hour==2),]
-T2_14_se <- sd(T2_14$CFU_ml)/sqrt(length((T2_14$CFU_ml)))
-
-# Mean
-T2_14_mean <- mean(T2_14$CFU_ml)
-T0_14_mean <- mean(T0_14$CFU_ml)
-fraccalc <- log2(T2_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T2_14_se^2)/(T2_14_mean^2)))
-phage14_frac_SE
-
-
-# 14-1 - 40C
-CFU_wphage_14 <- CFU_wphage[(CFU_wphage$Phage=="14-1"),]
-CFU_wphage_14_40 <- CFU_wphage_14[(CFU_wphage_14$Temp=="40"),]
-
-T0_14 <- CFU_wphage_14_40[(CFU_wphage_14_40$hour<1),]
-T0_14_se <- sd(T0_14$CFU_ml)/sqrt(length((T0_14$CFU_ml)))
-T2_14 <- CFU_wphage_14_40[(CFU_wphage_14_40$hour==2),]
-T2_14_se <- sd(T2_14$CFU_ml)/sqrt(length((T2_14$CFU_ml)))
-
-# Mean
-T2_14_mean <- mean(T2_14$CFU_ml)
-T0_14_mean <- mean(T0_14$CFU_ml)
-fraccalc <- log2(T2_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T2_14_se^2)/(T2_14_mean^2)))
-phage14_frac_SE
-
-# 14-1 - 42C
-CFU_wphage_14 <- CFU_wphage[(CFU_wphage$Phage=="14-1"),]
-CFU_wphage_14_42 <- CFU_wphage_14[(CFU_wphage_14$Temp=="42"),]
-
-T0_14 <- CFU_wphage_14_42[(CFU_wphage_14_42$hour<1),]
-T0_14_se <- sd(T0_14$CFU_ml)/sqrt(length((T0_14$CFU_ml)))
-T2_14 <- CFU_wphage_14_42[(CFU_wphage_14_42$hour==2),]
-T2_14_se <- sd(T2_14$CFU_ml)/sqrt(length((T2_14$CFU_ml)))
-
-# Mean
-T2_14_mean <- mean(T2_14$CFU_ml)
-T0_14_mean <- mean(T0_14$CFU_ml)
-fraccalc <- log2(T2_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T2_14_se^2)/(T2_14_mean^2)))
-phage14_frac_SE
 
 
 ## Population growth stats - calculating standard errors of the difference between means for each temperature at T5
 
 # T5 population growth
 
-## PEV2
+pfu <- read.csv("Plaque_assay_data.csv",fileEncoding="UTF-8-BOM")
 
-pfu_data_P <- pfu[(pfu$Phage=="PEV2"),]
+pfu$Rel_pfu_ml <- as.numeric(pfu$Rel_pfu_ml)
+pfu$Time_hour <- as.numeric(pfu$Time_hour)
 
-pfu_data_P_37 <- pfu_data_P[(pfu_data_P$Temp=="37"),]
-pfu_data_P_40 <- pfu_data_P[(pfu_data_P$Temp=="40"),]
-pfu_data_P_42 <- pfu_data_P[(pfu_data_P$Temp=="42"),]
+pfu$Temp <- as.factor(pfu$Temp)
+pfu$Phage <- factor(pfu$Phage, levels=c("PEV2","LUZ19","phage_14_1"), labels=c("\U03D5PEV2","\U03D5LUZ19","\U03D5 14-1"))
 
-# PEV2 - 37C
-T0_P <- pfu_data_P_37[(pfu_data_P_37$Time_hour<1),]
-T0_P_se <- sd(T0_P$pfu_ml)/sqrt(length((T0_P$pfu_ml)))
-T5_P <- pfu_data_P_37[(pfu_data_P_37$Time_hour==5),]
-T5_P_se <- sd(T5_P$pfu_ml)/sqrt(length((T5_P$pfu_ml)))
+PFU_group <- pfu %>%
+  filter(Time_hour < 1 | Time_hour == 5, Phage != "No phage") %>%
+  group_by(Phage, Temp, Time_hour) %>%
+  summarise(mean = mean(pfu_ml, na.rm = TRUE),
+            se = sd(pfu_ml, na.rm = TRUE) / sqrt(n()))
 
-# Mean
-T5_P_mean <- mean(T5_P$pfu_ml)
-T0_P_mean <- mean(T0_P$pfu_ml)
-fraccalc <- log2(T5_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T5_P_se^2)/(T5_P_mean^2)))
-P_frac_SE
-
-# PEV2 - 40C
-T0_P <- pfu_data_P_40[(pfu_data_P_40$Time_hour<1),]
-T0_P_se <- sd(T0_P$pfu_ml)/sqrt(length((T0_P$pfu_ml)))
-T5_P <- pfu_data_P_40[(pfu_data_P_40$Time_hour==5),]
-T5_P_se <- sd(T5_P$pfu_ml)/sqrt(length((T5_P$pfu_ml)))
-
-# Mean
-T5_P_mean <- mean(T5_P$pfu_ml)
-T0_P_mean <- mean(T0_P$pfu_ml)
-fraccalc <- log2(T5_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T5_P_se^2)/(T5_P_mean^2)))
-P_frac_SE
-
-# PEV2 - 42C
-T0_P <- pfu_data_P_42[(pfu_data_P_42$Time_hour<1),]
-T0_P_se <- sd(T0_P$pfu_ml)/sqrt(length((T0_P$pfu_ml)))
-T5_P <- pfu_data_P_42[(pfu_data_P_42$Time_hour==5),]
-T5_P_se <- sd(T5_P$pfu_ml)/sqrt(length((T5_P$pfu_ml)))
-
-# Mean
-T5_P_mean <- mean(T5_P$pfu_ml)
-T0_P_mean <- mean(T0_P$pfu_ml)
-fraccalc <- log2(T5_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T5_P_se^2)/(T5_P_mean^2)))
-P_frac_SE
-
-
-## LUZ19
-pfu_data_L <- pfu[(pfu$Phage=="LUZ19"),]
-
-pfu_data_L_37 <- pfu_data_L[(pfu_data_L$Temp=="37"),]
-pfu_data_L_40 <- pfu_data_L[(pfu_data_L$Temp=="40"),]
-pfu_data_L_42 <- pfu_data_L[(pfu_data_L$Temp=="42"),]
-
-# LUZ19 - 37C
-T0_L <- pfu_data_L_37[(pfu_data_L_37$Time_hour<1),]
-T0_L_se <- sd(T0_L$pfu_ml)/sqrt(length((T0_L$pfu_ml)))
-T5_L <- pfu_data_L_37[(pfu_data_L_37$Time_hour==5),]
-T5_L_se <- sd(T5_L$pfu_ml)/sqrt(length((T5_L$pfu_ml)))
-
-# Mean
-T5_L_mean <- mean(T5_L$pfu_ml)
-T0_L_mean <- mean(T0_L$pfu_ml)
-fraccalc <- log2(T5_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T5_L_se^2)/(T5_L_mean^2)))
-L_frac_SE
-
-
-# LUZ19 - 40C
-T0_L <- pfu_data_L_40[(pfu_data_L_40$Time_hour<1),]
-T0_L_se <- sd(T0_L$pfu_ml)/sqrt(length((T0_L$pfu_ml)))
-T5_L <- pfu_data_L_40[(pfu_data_L_40$Time_hour==5),]
-T5_L_se <- sd(T5_L$pfu_ml)/sqrt(length((T5_L$pfu_ml)))
-
-# Mean
-T5_L_mean <- mean(T5_L$pfu_ml)
-T0_L_mean <- mean(T0_L$pfu_ml)
-fraccalc <- log2(T5_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T5_L_se^2)/(T5_L_mean^2)))
-L_frac_SE
-
-
-# LUZ19 - 42C
-T0_L <- pfu_data_L_42[(pfu_data_L_42$Time_hour<1),]
-T0_L_se <- sd(T0_L$pfu_ml)/sqrt(length((T0_L$pfu_ml)))
-T5_L <- pfu_data_L_42[(pfu_data_L_42$Time_hour==5),]
-T5_L_se <- sd(T5_L$pfu_ml)/sqrt(length((T5_L$pfu_ml)))
-
-# Mean
-T5_L_mean <- mean(T5_L$pfu_ml)
-T0_L_mean <- mean(T0_L$pfu_ml)
-fraccalc <- log2(T5_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T5_L_se^2)/(T5_L_mean^2)))
-L_frac_SE
-
-
-
-## 14-1
-pfu_data_14 <- pfu[(pfu$Phage=="14-1"),]
-
-pfu_data_14_37 <- pfu_data_14[(pfu_data_14$Temp=="37"),]
-pfu_data_14_40 <- pfu_data_14[(pfu_data_14$Temp=="40"),]
-pfu_data_14_42 <- pfu_data_14[(pfu_data_14$Temp=="42"),]
-
-# 14-1 - 37C
-T0_14 <- pfu_data_14_37[(pfu_data_14_37$Time_hour<1),]
-T0_14_se <- sd(T0_14$pfu_ml)/sqrt(length((T0_14$pfu_ml)))
-T5_14 <- pfu_data_14_37[(pfu_data_14_37$Time_hour==5),]
-T5_14_se <- sd(T5_14$pfu_ml)/sqrt(length((T5_14$pfu_ml)))
-
-# Mean
-T5_14_mean <- mean(T5_14$pfu_ml)
-T0_14_mean <- mean(T0_14$pfu_ml)
-fraccalc <- log2(T5_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T5_14_se^2)/(T5_14_mean^2)))
-phage14_frac_SE
-
-
-# 14-1 - 40C
-T0_14 <- pfu_data_14_40[(pfu_data_14_40$Time_hour<1),]
-T0_14_se <- sd(T0_14$pfu_ml)/sqrt(length((T0_14$pfu_ml)))
-T5_14 <- pfu_data_14_40[(pfu_data_14_40$Time_hour==5),]
-T5_14_se <- sd(T5_14$pfu_ml)/sqrt(length((T5_14$pfu_ml)))
-
-# Mean
-T5_14_mean <- mean(T5_14$pfu_ml)
-T0_14_mean <- mean(T0_14$pfu_ml)
-fraccalc <- log2(T5_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T5_14_se^2)/(T5_14_mean^2)))
-phage14_frac_SE
-
-
-# 14-1 - 42C
-T0_14 <- pfu_data_14_42[(pfu_data_14_42$Time_hour<1),]
-T0_14_se <- sd(T0_14$pfu_ml)/sqrt(length((T0_14$pfu_ml)))
-T5_14 <- pfu_data_14_42[(pfu_data_14_42$Time_hour==5),]
-T5_14_se <- sd(T5_14$pfu_ml)/sqrt(length((T5_14$pfu_ml)))
-
-# Mean
-T5_14_mean <- mean(T5_14$pfu_ml)
-T0_14_mean <- mean(T0_14$pfu_ml)
-fraccalc <- log2(T5_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T5_14_se^2)/(T5_14_mean^2)))
-phage14_frac_SE
+PFU_group %>%
+  pivot_wider(names_from = Time_hour, values_from = c(mean, se)) %>%
+  mutate(mean_ratio = log2(mean_5/mean_0),
+         se_ratio = sqrt(((se_0^2)/(mean_0^2)) + ((se_5^2)/(mean_5^2)))) %>%
+  select(Phage, Temp, mean_ratio, se_ratio)
 
 
 
 # Population growth stats after 2h
 
-# PEV2
+PFU_group <- pfu %>%
+  filter(Time_hour < 1 | Time_hour == 2, Phage != "No phage") %>%
+  group_by(Phage, Temp, Time_hour) %>%
+  summarise(mean = mean(pfu_ml, na.rm = TRUE),
+            se = sd(pfu_ml, na.rm = TRUE) / sqrt(n()))
 
-# PEV2 - 37C
-T0_P <- pfu_data_P_37[(pfu_data_P_37$Time_hour<1),]
-T0_P_se <- sd(T0_P$pfu_ml)/sqrt(length((T0_P$pfu_ml)))
-T2_P <- pfu_data_P_37[(pfu_data_P_37$Time_hour==2),]
-T2_P_se <- sd(T2_P$pfu_ml)/sqrt(length((T2_P$pfu_ml)))
-
-# Mean
-T2_P_mean <- mean(T2_P$pfu_ml)
-T0_P_mean <- mean(T0_P$pfu_ml)
-fraccalc <- log2(T2_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T2_P_se^2)/(T2_P_mean^2)))
-P_frac_SE
-
-# PEV2 - 40C
-T0_P <- pfu_data_P_40[(pfu_data_P_40$Time_hour<1),]
-T0_P_se <- sd(T0_P$pfu_ml)/sqrt(length((T0_P$pfu_ml)))
-T2_P <- pfu_data_P_40[(pfu_data_P_40$Time_hour==2),]
-T2_P_se <- sd(T2_P$pfu_ml)/sqrt(length((T2_P$pfu_ml)))
-
-# Mean
-T2_P_mean <- mean(T2_P$pfu_ml)
-T0_P_mean <- mean(T0_P$pfu_ml)
-fraccalc <- log2(T2_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T2_P_se^2)/(T2_P_mean^2)))
-P_frac_SE
-
-
-# PEV2 - 42C
-T0_P <- pfu_data_P_42[(pfu_data_P_42$Time_hour<1),]
-T0_P_se <- sd(T0_P$pfu_ml)/sqrt(length((T0_P$pfu_ml)))
-T2_P <- pfu_data_P_42[(pfu_data_P_42$Time_hour==2),]
-T2_P_se <- sd(T2_P$pfu_ml)/sqrt(length((T2_P$pfu_ml)))
-
-# Mean
-T2_P_mean <- mean(T2_P$pfu_ml)
-T0_P_mean <- mean(T0_P$pfu_ml)
-fraccalc <- log2(T2_P_mean/T0_P_mean)
-fraccalc
-
-# Standard error
-P_frac_SE <- sqrt(((T0_P_se^2)/(T0_P_mean^2)) + ((T2_P_se^2)/(T2_P_mean^2)))
-P_frac_SE
-
-
-## LUZ19
-
-# LUZ19 - 37C
-T0_L <- pfu_data_L_37[(pfu_data_L_37$Time_hour<1),]
-T0_L_se <- sd(T0_L$pfu_ml)/sqrt(length((T0_L$pfu_ml)))
-T2_L <- pfu_data_L_37[(pfu_data_L_37$Time_hour==2),]
-T2_L_se <- sd(T2_L$pfu_ml)/sqrt(length((T2_L$pfu_ml)))
-
-# Mean
-T2_L_mean <- mean(T2_L$pfu_ml)
-T0_L_mean <- mean(T0_L$pfu_ml)
-fraccalc <- log2(T2_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T2_L_se^2)/(T2_L_mean^2)))
-L_frac_SE
-
-
-# LUZ19 - 40C
-T0_L <- pfu_data_L_40[(pfu_data_L_40$Time_hour<1),]
-T0_L_se <- sd(T0_L$pfu_ml)/sqrt(length((T0_L$pfu_ml)))
-T2_L <- pfu_data_L_40[(pfu_data_L_40$Time_hour==2),]
-T2_L_se <- sd(T2_L$pfu_ml)/sqrt(length((T2_L$pfu_ml)))
-
-# Mean
-T2_L_mean <- mean(T2_L$pfu_ml)
-T0_L_mean <- mean(T0_L$pfu_ml)
-fraccalc <- log2(T2_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T2_L_se^2)/(T2_L_mean^2)))
-L_frac_SE
-
-
-# LUZ19 - 42C
-T0_L <- pfu_data_L_42[(pfu_data_L_42$Time_hour<1),]
-T0_L_se <- sd(T0_L$pfu_ml)/sqrt(length((T0_L$pfu_ml)))
-T2_L <- pfu_data_L_42[(pfu_data_L_42$Time_hour==2),]
-T2_L_se <- sd(T2_L$pfu_ml)/sqrt(length((T2_L$pfu_ml)))
-
-# Mean
-T2_L_mean <- mean(T2_L$pfu_ml)
-T0_L_mean <- mean(T0_L$pfu_ml)
-fraccalc <- log2(T2_L_mean/T0_L_mean)
-fraccalc
-
-# Standard error
-L_frac_SE <- sqrt(((T0_L_se^2)/(T0_L_mean^2)) + ((T2_L_se^2)/(T2_L_mean^2)))
-L_frac_SE
-
-
-
-## 14-1
-
-# 14-1 - 37C
-T0_14 <- pfu_data_14_37[(pfu_data_14_37$Time_hour<1),]
-T0_14_se <- sd(T0_14$pfu_ml)/sqrt(length((T0_14$pfu_ml)))
-T2_14 <- pfu_data_14_37[(pfu_data_14_37$Time_hour==2),]
-T2_14_se <- sd(T2_14$pfu_ml)/sqrt(length((T2_14$pfu_ml)))
-
-# Mean
-T2_14_mean <- mean(T2_14$pfu_ml)
-T0_14_mean <- mean(T0_14$pfu_ml)
-fraccalc <- log2(T2_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T2_14_se^2)/(T2_14_mean^2)))
-phage14_frac_SE
-
-
-# 14-1 - 40C
-T0_14 <- pfu_data_14_40[(pfu_data_14_40$Time_hour<1),]
-T0_14_se <- sd(T0_14$pfu_ml)/sqrt(length((T0_14$pfu_ml)))
-T2_14 <- pfu_data_14_40[(pfu_data_14_40$Time_hour==2),]
-T2_14_se <- sd(T2_14$pfu_ml)/sqrt(length((T2_14$pfu_ml)))
-
-# Mean
-T2_14_mean <- mean(T2_14$pfu_ml)
-T0_14_mean <- mean(T0_14$pfu_ml)
-fraccalc <- log2(T2_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T2_14_se^2)/(T2_14_mean^2)))
-phage14_frac_SE
-
-
-# 14-1 - 42C
-T0_14 <- pfu_data_14_42[(pfu_data_14_42$Time_hour<1),]
-T0_14_se <- sd(T0_14$pfu_ml)/sqrt(length((T0_14$pfu_ml)))
-T2_14 <- pfu_data_14_42[(pfu_data_14_42$Time_hour==2),]
-T2_14_se <- sd(T2_14$pfu_ml)/sqrt(length((T2_14$pfu_ml)))
-
-# Mean
-T2_14_mean <- mean(T2_14$pfu_ml)
-T0_14_mean <- mean(T0_14$pfu_ml)
-fraccalc <- log2(T2_14_mean/T0_14_mean)
-fraccalc
-
-# Standard error
-phage14_frac_SE <- sqrt(((T0_14_se^2)/(T0_14_mean^2)) + ((T2_14_se^2)/(T2_14_mean^2)))
-phage14_frac_SE
-
+PFU_group %>%
+  pivot_wider(names_from = Time_hour, values_from = c(mean, se)) %>%
+  mutate(mean_ratio = log2(mean_2/mean_0),
+         se_ratio = sqrt(((se_0^2)/(mean_0^2)) + ((se_2^2)/(mean_2^2)))) %>%
+  select(Phage, Temp, mean_ratio, se_ratio)
 
 
 
