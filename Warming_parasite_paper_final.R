@@ -9,13 +9,11 @@ require("car")
 require("ggplot2")
 require("RColorBrewer")
 require("patchwork")
-require("tidyverse") 
 require("zoo") 
 require("broom")
 require("ggbeeswarm")
 require("nlme")
 require("emmeans")
-require("ggsignif")
 require("FSA")
 require("pgirmess")
 require("DescTools")
@@ -23,10 +21,10 @@ require("ggpmisc")
 require("devtools")
 require("ggradar")
 require("scales")
-require(colorblindr)
+require("colorblindr")
 require("ggtext")
-
-
+require("cowplot")
+require("tidyverse") 
 
 #Figure S1 - Optical density is correlated with colony-forming units
 CFU_OD_regression <- read_csv("CFU_OD_regression.csv")
@@ -196,7 +194,7 @@ pfu_models <- pfu_grouped_data %>%
 length(pfu_models$model)
 
 plots <- lapply(1:9, function(i) plot(pfu_models$model[[i]], main = paste(pfu_models$Phage[[i]], pfu_models$Temp[[i]])))
-cowplot::plot_grid(plotlist = plots)
+plot_grid(plotlist = plots)
 
 
 # Generate model summaries
@@ -258,7 +256,7 @@ qpcr_models <- qpcr_grouped_data %>%
 length(qpcr_models$model)
 
 plots <- lapply(1:9, function(i) plot(qpcr_models$model[[i]], main = paste(qpcr_models$Treatment[[i]], qpcr_models$Temp[[i]])))
-cowplot::plot_grid(plotlist = plots)
+plot_grid(plotlist = plots)
 
 
 # Generate model summaries
@@ -282,7 +280,7 @@ CFU_wphage$Temp <- as.factor(CFU_wphage$Temp)
 
 # Set 0s to 1 so data can be plotted on log scale
 CFU_wphage <- CFU_wphage %>%
-  dplyr::mutate(standard_CFU_ml = ifelse(CFU_ml == 0, 1, CFU_ml))
+  mutate(standard_CFU_ml = ifelse(CFU_ml == 0, 1, CFU_ml))
 
 ggplot(CFU_wphage, aes(hour, standard_CFU_ml, colour = as.factor(Temp))) +
   geom_jitter(width = 0.2) +
@@ -346,7 +344,7 @@ CFU_nophage <- read_csv("T0_T5_CFU.csv")
 
 nophage_CFU <- ggplot(data=CFU_nophage, aes(x = as.factor(hour), y= CFU_ml, fill=as.factor(Temp))) + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1,lwd=1, alpha = 0.7,show.legend = F,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=1,show.legend = F)+
+  geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=1,show.legend = F)+
   ylab("Bacterial density (CFU/ml)") +
   xlab("Time point") +
   #ylim((10^8),(10^10))+
@@ -375,12 +373,12 @@ emmeans(model, pairwise ~ Temp)
 
 # Get number of bacterial doublings
 group_mean <- CFU_nophage %>%
-  dplyr::group_by(hour, Temp) %>%
-  dplyr::summarise(mean_value = mean(CFU_ml))
+  group_by(hour, Temp) %>%
+  summarise(mean_value = mean(CFU_ml))
 
 group_mean %>%
-  dplyr::group_by(Temp) %>%
-  dplyr::summarise(Bacterial_doublings = log2(mean_value[hour == 5] / mean_value[hour == 0]))
+  group_by(Temp) %>%
+  summarise(Bacterial_doublings = log2(mean_value[hour == 5] / mean_value[hour == 0]))
 
 
 
@@ -418,7 +416,7 @@ decay_rate_models <- decay_rate_data %>%
 length(decay_rate_models$model)
 
 plots <- lapply(1:3, function(i) plot(decay_rate_models$model[[i]], main = paste(decay_rate_models$Phage[[i]])))
-cowplot::plot_grid(plotlist = plots)
+plot_grid(plotlist = plots)
 
 decay_rate_models$model_summaries
 
@@ -456,11 +454,11 @@ model_data <- decay_rate_models_predict %>%
          upper_fit = fitted + conf_int,
          lower_fit = fitted - conf_int,
          ) %>%
-  dplyr::group_by(Phage, Temp) %>%
-  dplyr::mutate(Time = new_x) %>%
+  group_by(Phage, Temp) %>%
+  mutate(Time = new_x) %>%
   ungroup() %>%
-  dplyr::group_by(Phage) %>%
-  dplyr::mutate(half_dens = map(data, ~max(.x$PFU_ML/2))) %>% # Include the value when phage density has decreased by half
+  group_by(Phage) %>%
+  mutate(half_dens = map(data, ~max(.x$PFU_ML/2))) %>% # Include the value when phage density has decreased by half
   ungroup() %>%
   select(Phage, Temp, fitted, se, upper_fit, lower_fit, half_dens, Time)
 
@@ -542,7 +540,7 @@ adsorption_rate_models <- adsorption_assay_filtered %>%
 length(adsorption_rate_models_P_L$model)
 
 plots <- lapply(1:3, function(i) plot(adsorption_rate_models_P_L$model[[i]], main = paste(adsorption_rate_models$Phage[[i]])))
-cowplot::plot_grid(plotlist = plots)
+plot_grid(plotlist = plots)
 
 adsorption_rate_models$model_summaries
 
@@ -582,11 +580,11 @@ model_data <- adsorption_rate_models_predict %>%
          upper_fit = fitted + conf_int,
          lower_fit = fitted - conf_int,
   ) %>%
-  dplyr::group_by(Phage, Temp) %>%
-  dplyr::mutate(Time = new_x) %>%
+  group_by(Phage, Temp) %>%
+  mutate(Time = new_x) %>%
   ungroup() %>%
-  dplyr::group_by(Phage) %>%
-  dplyr::mutate(half_dens = map(data, ~max(.x$PFU_ML_round/2))) %>% # Include the value when phage density has decreased by half
+  group_by(Phage) %>%
+  mutate(half_dens = map(data, ~max(.x$PFU_ML_round/2))) %>% # Include the value when phage density has decreased by half
   ungroup() %>%
   select(Phage, Temp, fitted, se, upper_fit, lower_fit, half_dens, Time)
 
@@ -655,8 +653,8 @@ radar_rename <- radar_rename %>%
 # Make radar plots
 
 radar_rename %>%
-  dplyr::group_by(Phage) %>%
-  dplyr::group_map(~ {
+  group_by(Phage) %>%
+  group_map(~ {
 
     p <- ggradar(., 
                 values.radar = c(0, 0.5, 1),
@@ -812,7 +810,7 @@ qpcr_models <- qPCR_data_group %>%
 length(qpcr_models$model)
 
 plots <- lapply(1:3, function(i) plot(qpcr_models$model[[i]], main = paste(qpcr_models$Treatment[[i]], qpcr_models$Temp[[i]])))
-cowplot::plot_grid(plotlist = plots)
+plot_grid(plotlist = plots)
 
 # Generate model summaries
 qpcr_models$model_summaries
@@ -841,7 +839,7 @@ phage14_qPCR$Competitor <- factor(phage14_qPCR$Competitor, levels=c("No_competit
 
 pev2_plot <- ggplot(data=PEV2_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.5,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=3, dodge.width = .75, color="black",alpha=.7,show.legend = F)+
+  geom_quasirandom(shape = 21,size=3, dodge.width = .75, color="black",alpha=.7,show.legend = F)+
   ylab("Fold increase in phage DNA (T0-T5)") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(100,22000)) +
@@ -862,7 +860,7 @@ pev2_plot <- ggplot(data=PEV2_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero,
 
 luz19_plot <-ggplot(data=LUZ19_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=3, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
+  geom_quasirandom(shape = 21,size=3, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Relative phage DNA concentration") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(100,22000)) +
@@ -887,7 +885,7 @@ luz19_plot <-ggplot(data=LUZ19_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero
 
 phage14_plot <- ggplot(data=phage14_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=3, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
+  geom_quasirandom(shape = 21,size=3, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Phage growth (fold increase) across 5 hour period") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(100,22000)) +
@@ -966,7 +964,7 @@ qpcr_models <- qPCR_data_group %>%
 length(qpcr_models$model)
 
 plots <- lapply(1:3, function(i) plot(qpcr_models$model[[i]], main = paste(qpcr_models$Treatment[[i]], qpcr_models$Temp[[i]])))
-cowplot::plot_grid(plotlist = plots)
+plot_grid(plotlist = plots)
 
 # Generate model summaries
 qpcr_models$model_summaries
@@ -995,7 +993,7 @@ phage14_qPCR$Competitor <- factor(phage14_qPCR$Competitor, levels=c("No_competit
 
 pev2_plot <- ggplot(data=PEV2_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
+  geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(10,1000)) +
@@ -1010,7 +1008,7 @@ pev2_plot <- ggplot(data=PEV2_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero,
 
 luz19_plot <- ggplot(data=LUZ19_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
+  geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(10,1000)) +
@@ -1026,7 +1024,7 @@ luz19_plot <- ggplot(data=LUZ19_qPCR, aes(Competitor, Fold_change_DNAconc_to_zer
 
 phage14_plot <- ggplot(data=phage14_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
+  geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(10,1000)) +
@@ -1073,7 +1071,7 @@ qpcr_models <- qPCR_data_group %>%
 length(qpcr_models$model)
 
 plots <- lapply(1:3, function(i) plot(qpcr_models$model[[i]], main = paste(qpcr_models$Treatment[[i]], qpcr_models$Temp[[i]])))
-cowplot::plot_grid(plotlist = plots)
+plot_grid(plotlist = plots)
 
 # Generate model summaries
 qpcr_models$model_summaries
@@ -1102,7 +1100,7 @@ phage14_qPCR$Competitor <- factor(phage14_qPCR$Competitor, levels=c("No_competit
 
 pev2_plot <- ggplot(data=PEV2_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
+  geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(0.1,1000)) +
@@ -1116,7 +1114,7 @@ pev2_plot <- ggplot(data=PEV2_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero,
 
 luz19_plot <- ggplot(data=LUZ19_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
+  geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(0.1,1000)) +
@@ -1131,7 +1129,7 @@ luz19_plot <- ggplot(data=LUZ19_qPCR, aes(Competitor, Fold_change_DNAconc_to_zer
 
 phage14_plot <- ggplot(data=phage14_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
+  geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(0.1,1000)) +
