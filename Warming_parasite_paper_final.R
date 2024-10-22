@@ -789,29 +789,57 @@ PFU_group %>%
 
 # Figure 3A - Phage competition at 37C and 40C
 
-
-qPCR_data <- read.csv("qPCR_data.csv",fileEncoding="UTF-8-BOM")
+qPCR_data <- read_csv("qPCR_data.csv")
 
 qPCR_data$Fold_change_DNAconc_to_zero <- as.numeric(qPCR_data$Fold_change_DNAconc_to_zero)
 qPCR_data$Time <- as.numeric(qPCR_data$Time)
 qPCR_data$Temp <- as.factor(qPCR_data$Temp)
 
-PEV2_qPCR <- qPCR_data[(qPCR_data$Phage=="PEV2"),]
-LUZ19_qPCR <- qPCR_data[(qPCR_data$Phage=="LUZ19"),]
-phage14_qPCR <- qPCR_data[(qPCR_data$Phage=="phage14"),]
+
+qPCR_data_group <- qPCR_data %>%
+  group_by(Phage) %>%
+  filter(Time == "5" & Temp != 42) %>%
+  nest()
+
+qpcr_models <- qPCR_data_group %>%
+  mutate(model = map(data, ~ lme(DNA_conc ~ Competitor + Temp + Competitor:Temp, random= ~1|Batch, data= ., method = "REML", weights = varIdent(form = ~1|Competitor)))) %>%
+  mutate(model_summaries = map(model, summary))%>%
+  mutate(model_pairwise = map(model, ~ {
+    emmeans(.x, pairwise ~ Competitor:Temp)
+  }))
+
+# Diagnostic plots
+length(qpcr_models$model)
+
+plots <- lapply(1:3, function(i) plot(qpcr_models$model[[i]], main = paste(qpcr_models$Treatment[[i]], qpcr_models$Temp[[i]])))
+cowplot::plot_grid(plotlist = plots)
+
+# Generate model summaries
+qpcr_models$model_summaries
+qpcr_models$model_pairwise
 
 
-# PEV2
-pev2_qPCR_late_3740 <- PEV2_qPCR[(PEV2_qPCR$Time=="5" & PEV2_qPCR$Temp!=42),]
-pev2_qPCR_late_3740$Competitor <- factor(pev2_qPCR_late_3740$Competitor, levels=c("No_competitor","LUZ19", "phage14","3P"), labels=c("No competitor","LUZ19","14-1","3-phage"))
+# Plots - separate plots needed for each phage as different competitor order and different significance indicators
 
-model <- lme(DNA_conc ~ Competitor + Temp + Competitor:Temp, random= ~1|Batch, data= pev2_qPCR_late_3740, method = "REML", weights = varIdent(form = ~1|Competitor))
-plot(model)
-anova(model)
-emmeans(model, pairwise ~ Competitor:Temp)
+# Filter dataset
+PEV2_qPCR <- qPCR_data %>%
+  filter(Phage=="PEV2" & Time == "5" & Temp != 42)
 
-pev2_3740_tempcomp <- ggplot(data=pev2_qPCR_late_3740, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
-  #geom_violin(alpha=0.5, position = position_dodge(width = .75),size=1,color=NA)+
+LUZ19_qPCR <- qPCR_data %>%
+  filter(Phage=="LUZ19" & Time == "5" & Temp != 42)
+
+phage14_qPCR <- qPCR_data %>%
+  filter(Phage=="phage14" & Time == "5" & Temp != 42)
+
+# Order competitors
+
+PEV2_qPCR$Competitor <- factor(PEV2_qPCR$Competitor, levels=c("No_competitor","LUZ19", "phage14","3P"), labels=c("No competitor","LUZ19","14-1","3-phage"))
+LUZ19_qPCR$Competitor <- factor(LUZ19_qPCR$Competitor, levels=c("No_competitor","PEV2", "phage14","3P"), labels=c("No competitor","PEV2","14-1","3-phage"))
+phage14_qPCR$Competitor <- factor(phage14_qPCR$Competitor, levels=c("No_competitor","PEV2", "LUZ19","3P"), labels=c("No competitor","PEV2","LUZ19","3-phage"))
+
+#Plots
+
+pev2_plot <- ggplot(data=PEV2_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.5,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
   ggbeeswarm::geom_quasirandom(shape = 21,size=3, dodge.width = .75, color="black",alpha=.7,show.legend = F)+
   ylab("Fold increase in phage DNA (T0-T5)") +
@@ -825,33 +853,14 @@ pev2_3740_tempcomp <- ggplot(data=pev2_qPCR_late_3740, aes(Competitor, Fold_chan
               xmax = 1.8, annotation = "*",
               tip_length = 0.05)+
   theme_bw()+
-  geom_smooth(method = "lm")+
   labs(fill="Temperature (\u00B0C)")+
   scale_fill_manual(values = c("#ffeda0","#feb24c"))+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   theme(axis.title=element_text(size=10,face="bold")) + 
-  #theme(axis.text.x = element_text(angle = 45, vjust = 0.1, hjust=1))+
   theme(legend.title = element_text(colour="black", size=10,face="bold"),legend.text = element_text(size=9))
 
-# Test for color-blindness visibility
 
-cvd_grid(phage14_3740_tempcomp)
-
-
-
-# LUZ19
-
-luz19_qPCR_late_3740 <- LUZ19_qPCR[(LUZ19_qPCR$Time=="5" & LUZ19_qPCR$Temp!=42),]
-luz19_qPCR_late_3740$Treatment <- factor(luz19_qPCR_late_3740$Treatment, levels=c("luz19", "PL", "L14","3P"), labels=c("LUZ19", "P + L","L + 14-1", "3-phage"))
-luz19_qPCR_late_3740$Competitor <- factor(luz19_qPCR_late_3740$Competitor, levels=c("No_competitor","PEV2", "phage14","3P"), labels=c("No competitor","PEV2","14-1","3-phage"))
-
-model <- lme(DNA_conc ~ Competitor + Temp + Competitor:Temp, random= ~1|Batch, data= luz19_qPCR_late_3740, method = "REML", weights = varIdent(form = ~1|Competitor))
-plot(model)
-anova(model)
-emmeans(model, ~ Competitor:Temp)
-
-luz19_3740_tempcomp <-ggplot(data=luz19_qPCR_late_3740, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
-  #geom_violin(alpha=0.5, position = position_dodge(width = .75),size=1,color=NA)+
+luz19_plot <-ggplot(data=LUZ19_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
   ggbeeswarm::geom_quasirandom(shape = 21,size=3, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Relative phage DNA concentration") +
@@ -869,28 +878,14 @@ luz19_3740_tempcomp <-ggplot(data=luz19_qPCR_late_3740, aes(Competitor, Fold_cha
               tip_length = 0.05)+
   theme_bw()+
   labs(fill="Temperature (\u00B0C)")+
-  geom_smooth(method = "lm")+
   scale_fill_manual(values = c("#ffeda0","#feb24c"))+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   theme(axis.title.y=element_blank()) + 
   theme(axis.title=element_text(size=10,face="bold")) + 
-  #theme(axis.text.x = element_text(angle = 45, vjust = 0.1, hjust=1))+
   theme(legend.title = element_text(colour="black", size=10,face="bold"),legend.text = element_text(size=9))
 
 
-# 14-1
-
-phage14_qPCR_late_3740 <- phage14_qPCR[(phage14_qPCR$Time=="5" & phage14_qPCR$Temp!=42),]
-phage14_qPCR_late_3740$Treatment <- factor(phage14_qPCR_late_3740$Treatment, levels=c("phage14", "P14", "L14","3P"), labels=c("14-1", "P + 14-1","L + 14-1", "3-phage"))
-phage14_qPCR_late_3740$Competitor <- factor(phage14_qPCR_late_3740$Competitor, levels=c("No_competitor","PEV2", "LUZ19","3P"), labels=c("No competitor","PEV2","LUZ19","3-phage"))
-
-model <- lme(DNA_conc ~ Competitor + Temp + Competitor:Temp, random= ~1|Batch, data= phage14_qPCR_late_3740, method = "REML", weights = varIdent(form = ~1|Competitor))
-plot(model)
-anova(model)
-emmeans(model, pairwise ~ Competitor:Temp)
-
-phage14_3740_tempcomp <- ggplot(data=phage14_qPCR_late_3740, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
-  #geom_violin(alpha=0.5, position = position_dodge(width = .75),size=1,color=NA)+
+phage14_plot <- ggplot(data=phage14_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
   ggbeeswarm::geom_quasirandom(shape = 21,size=3, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Phage growth (fold increase) across 5 hour period") +
@@ -905,26 +900,26 @@ phage14_3740_tempcomp <- ggplot(data=phage14_qPCR_late_3740, aes(Competitor, Fol
               tip_length = 0.02)+
   theme_bw()+
   labs(fill="Temperature (\u00B0C)")+
-  geom_smooth(method = "lm")+
   scale_fill_manual(values = c("#ffeda0","#feb24c"))+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
-  #theme(axis.title.y=element_blank()) + 
+  theme(axis.title.y=element_blank()) + 
   theme(axis.title=element_text(size=12,face="bold")) + 
-  #theme(axis.text.x = element_text(angle = 45, vjust = 0.1, hjust=1))+
   theme(legend.title = element_text(colour="black", size=11,face="bold"),legend.text = element_text(size=9))
 
-pev2_3740_tempcomp + luz19_3740_tempcomp + phage14_3740_tempcomp + plot_layout(guides="collect")& theme(legend.position="bottom")
+pev2_plot + luz19_plot + phage14_plot + plot_layout(guides="collect")& theme(legend.position="bottom")
+
+cvd_grid(pev2_plot) # Check for colour blind accessibility
 
 ggsave("Fig_3A.tiff")
 
 
 
-# Figure 3C - Summary plot of phage competitiveness
+# Figure 3B - Summary plot of phage competitiveness
 
 average_res <- read.csv("Phage_impact_on_phage_replication_average.csv",fileEncoding="UTF-8-BOM")
+
 average_res$Temp <- as.factor(average_res$Temp)
 average_res$Temp <- factor(average_res$Temp, levels = c("37C","40C","42C"), labels = c("37°C","40°C","42°C"))
-
 average_res$Phage <- factor(average_res$Phage, levels=c("PEV2", "LUZ19", "14_1"), labels= c(expression('\u03d5PEV2'), expression("\u03d5LUZ19"), expression("\u03d514-1")))
 
 ggplot(average_res,aes(x=Average_restricting_opposite,y=Average_restricted, group = Phage))+ 
@@ -949,64 +944,71 @@ ggsave("Fig_3C.tiff")
 
 ## Figure S6 - Phage competition at 37C after 2h
 
+qPCR_data <- read_csv("qPCR_data.csv")
 
-# PEV2
-pev2_qPCR_T2_37 <- PEV2_qPCR[(PEV2_qPCR$Time=="2" & PEV2_qPCR$Temp==37),]
-pev2_qPCR_T2_37$Competitor <- factor(pev2_qPCR_T2_37$Competitor, levels=c("No_competitor","LUZ19", "phage14","3P"), labels=c("No competitor","LUZ19","14-1","3-phage"))
+qPCR_data$Fold_change_DNAconc_to_zero <- as.numeric(qPCR_data$Fold_change_DNAconc_to_zero)
+qPCR_data$Time <- as.numeric(qPCR_data$Time)
+qPCR_data$Temp <- as.factor(qPCR_data$Temp)
 
-model <- lme(DNA_conc ~ Competitor, random= ~1|Batch, data= pev2_qPCR_T2_37, method = "REML", weights = varIdent(form = ~1|Competitor))
-plot(model)
-anova(model)
-emmeans(model, pairwise ~ Competitor)
+qPCR_data_group <- qPCR_data %>%
+  group_by(Phage) %>%
+  filter(Time == "2" & Temp == 37) %>%
+  nest()
+
+qpcr_models <- qPCR_data_group %>%
+  mutate(model = map(data, ~ lme(DNA_conc ~ Competitor, random= ~1|Batch, data= ., method = "REML", weights = varIdent(form = ~1|Competitor)))) %>%
+  mutate(model_summaries = map(model, summary))%>%
+  mutate(model_pairwise = map(model, ~ {
+    emmeans(.x, pairwise ~ Competitor)
+  }))
+
+# Diagnostic plots
+length(qpcr_models$model)
+
+plots <- lapply(1:3, function(i) plot(qpcr_models$model[[i]], main = paste(qpcr_models$Treatment[[i]], qpcr_models$Temp[[i]])))
+cowplot::plot_grid(plotlist = plots)
+
+# Generate model summaries
+qpcr_models$model_summaries
+qpcr_models$model_pairwise
 
 
-# LUZ19
-luz19_qPCR_T2_37 <- LUZ19_qPCR[(LUZ19_qPCR$Time=="2" & LUZ19_qPCR$Temp==37),]
-luz19_qPCR_T2_37$Treatment <- factor(luz19_qPCR_T2_37$Treatment, levels=c("luz19", "PL", "L14","3P"), labels=c("LUZ19", "P + L","L + 14-1", "3-phage"))
-luz19_qPCR_T2_37$Competitor <- factor(luz19_qPCR_T2_37$Competitor, levels=c("No_competitor","PEV2", "phage14","3P"), labels=c("No competitor","PEV2","14-1","3-phage"))
+# Plots - separate plots needed for each phage as different competitor order and different significance indicators
 
-# LUZ19
-model <- lme(DNA_conc ~ Competitor, random= ~1|Batch, data= luz19_qPCR_T2_37, method = "REML", weights = varIdent(form = ~1|Competitor))
-plot(model)
+# Filter dataset
+PEV2_qPCR <- qPCR_data %>%
+  filter(Phage=="PEV2" & Time == "2" & Temp == 37)
 
-anova(model)
-emmeans(model, pairwise ~ Competitor)
+LUZ19_qPCR <- qPCR_data %>%
+  filter(Phage=="LUZ19" & Time == "2" & Temp == 37)
 
-# phage 14-1
-phage14_qPCR_T2_37 <- phage14_qPCR[(phage14_qPCR$Time=="2" & phage14_qPCR$Temp==37),]
-phage14_qPCR_T2_37$Treatment <- factor(phage14_qPCR_T2_37$Treatment, levels=c("phage14", "P14", "L14","3P"), labels=c("14-1", "P + 14-1","L + 14-1", "3-phage"))
-phage14_qPCR_T2_37$Competitor <- factor(phage14_qPCR_T2_37$Competitor, levels=c("No_competitor","PEV2", "LUZ19","3P"), labels=c("No competitor","PEV2","LUZ19","3-phage"))
+phage14_qPCR <- qPCR_data %>%
+  filter(Phage=="phage14" & Time == "2" & Temp == 37)
 
-# 14-1
-model <- lme(DNA_conc ~ Competitor, random= ~1|Batch, data= phage14_qPCR_T2_37, method = "REML", weights = varIdent(form = ~1|Competitor))
-plot(model)
+# Order competitors
 
-anova(model)
-emmeans(model, pairwise ~ Competitor)
+PEV2_qPCR$Competitor <- factor(PEV2_qPCR$Competitor, levels=c("No_competitor","LUZ19", "phage14","3P"), labels=c("No competitor","LUZ19","14-1","3-phage"))
+LUZ19_qPCR$Competitor <- factor(LUZ19_qPCR$Competitor, levels=c("No_competitor","PEV2", "phage14","3P"), labels=c("No competitor","PEV2","14-1","3-phage"))
+phage14_qPCR$Competitor <- factor(phage14_qPCR$Competitor, levels=c("No_competitor","PEV2", "LUZ19","3P"), labels=c("No competitor","PEV2","LUZ19","3-phage"))
 
-pev2_comp_T2_37 <- ggplot(data=pev2_qPCR_T2_37, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
-  #geom_violin(alpha=0.5, position = position_dodge(width = .75),size=1,color=NA)+
+#Plots
+
+pev2_plot <- ggplot(data=PEV2_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
   ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(10,1000)) +
   annotation_logticks(sides="l")+
-  #geom_signif(y_position = 2.8, xmin = 1, 
-  #  xmax = 2, annotation = "*",
-  #  tip_length = 0.05)+
   theme_bw()+
-  geom_smooth(method = "lm")+
   scale_fill_manual(values = "#ffeda0") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   theme(axis.title=element_text(size=10,face="bold")) + 
   theme(axis.title.x=element_blank()) + 
-  #theme(axis.text.x = element_text(angle = 45, vjust = 0.1, hjust=1))+
   theme(legend.position = "none")
 
 
-luz19_comp_T2_37 <- ggplot(data=luz19_qPCR_T2_37, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
-  #geom_violin(alpha=0.5, position = position_dodge(width = .75),size=1,color=NA)+
+luz19_plot <- ggplot(data=LUZ19_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
   ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
@@ -1014,17 +1016,15 @@ luz19_comp_T2_37 <- ggplot(data=luz19_qPCR_T2_37, aes(Competitor, Fold_change_DN
   scale_y_continuous(trans='log10', limits = c(10,1000)) +
   annotation_logticks(sides="l")+
   theme_bw()+
-  geom_smooth(method = "lm")+
   scale_fill_manual(values = "#ffeda0") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   theme(axis.title.y=element_blank()) + 
   theme(axis.title.x=element_blank()) + 
   theme(axis.title=element_text(size=10,face="bold")) + 
-  #theme(axis.text.x = element_text(angle = 45, vjust = 0.1, hjust=1))+
   theme(legend.position = "none")
 
-phage14_comp_T2_37 <- ggplot(data=phage14_qPCR_T2_37, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
-  #geom_violin(alpha=0.5, position = position_dodge(width = .75),size=1,color=NA)+
+
+phage14_plot <- ggplot(data=phage14_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
   ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
@@ -1035,114 +1035,116 @@ phage14_comp_T2_37 <- ggplot(data=phage14_qPCR_T2_37, aes(Competitor, Fold_chang
               xmax = c(4), annotation = c("*"),textsize=5,
               tip_length = 0.03)+
   theme_bw()+
-  geom_smooth(method = "lm")+
   scale_fill_manual(values = "#ffeda0") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   theme(axis.title.y=element_blank()) +
   theme(axis.title.x=element_blank()) + 
   theme(axis.title=element_text(size=10,face="bold")) + 
-  #theme(axis.text.x = element_text(angle = 45, vjust = 0.1, hjust=1))+
   theme(legend.position = "none")
 
-pev2_comp_T2_37+luz19_comp_T2_37+ phage14_comp_T2_37
+
+pev2_plot + luz19_plot + phage14_plot
 
 ggsave("Fig_S6.tiff")
 
 
+
 ## Figure S7 - Phage competition at 42C
 
-# PEV2
-pev2_qPCR_late_42 <- PEV2_qPCR[(PEV2_qPCR$Time=="5" & PEV2_qPCR$Temp==42),]
-pev2_qPCR_late_42$Competitor <- factor(pev2_qPCR_late_42$Competitor, levels=c("No_competitor","LUZ19", "phage14","3P"), labels=c("No competitor","LUZ19","14-1","3-phage"))
+qPCR_data <- read_csv("qPCR_data.csv")
 
-model <- lme(DNA_conc ~ Competitor, random= ~1|Batch, data= pev2_qPCR_late_42, method = "REML", weights = varIdent(form = ~1|Competitor))
-plot(model)
-anova(model)
-emmeans(model, pairwise ~ Competitor)
+qPCR_data$Fold_change_DNAconc_to_zero <- as.numeric(qPCR_data$Fold_change_DNAconc_to_zero)
+qPCR_data$Time <- as.numeric(qPCR_data$Time)
+qPCR_data$Temp <- as.factor(qPCR_data$Temp)
 
-# LUZ19
-luz19_qPCR_late_42 <- LUZ19_qPCR[(LUZ19_qPCR$Time=="5" & LUZ19_qPCR$Temp==42),]
-luz19_qPCR_late_42$Treatment <- factor(luz19_qPCR_late_42$Treatment, levels=c("luz19", "PL", "L14","3P"), labels=c("LUZ19", "P + L","L + 14-1", "3-phage"))
-luz19_qPCR_late_42$Competitor <- factor(luz19_qPCR_late_42$Competitor, levels=c("No_competitor","PEV2", "phage14","3P"), labels=c("No competitor","PEV2","14-1","3-phage"))
+qPCR_data_group <- qPCR_data %>%
+  group_by(Phage) %>%
+  filter(Time == "5" & Temp == 42) %>%
+  nest()
 
-# LUZ19
-model <- lme(DNA_conc ~ Competitor, random= ~1|Batch, data= luz19_qPCR_late_42, method = "REML", weights = varIdent(form = ~1|Competitor))
-plot(model)
-anova(model)
-emmeans(model, pairwise ~ Competitor)
+qpcr_models <- qPCR_data_group %>%
+  mutate(model = map(data, ~ lme(DNA_conc ~ Competitor, random= ~1|Batch, data= ., method = "REML", weights = varIdent(form = ~1|Competitor)))) %>%
+  mutate(model_summaries = map(model, summary))%>%
+  mutate(model_pairwise = map(model, ~ {
+    emmeans(.x, pairwise ~ Competitor)
+  }))
+
+# Diagnostic plots
+length(qpcr_models$model)
+
+plots <- lapply(1:3, function(i) plot(qpcr_models$model[[i]], main = paste(qpcr_models$Treatment[[i]], qpcr_models$Temp[[i]])))
+cowplot::plot_grid(plotlist = plots)
+
+# Generate model summaries
+qpcr_models$model_summaries
+qpcr_models$model_pairwise
 
 
-# phage 14-1
-phage14_qPCR_late_42 <- phage14_qPCR[(phage14_qPCR$Time=="5" & phage14_qPCR$Temp==42),]
-phage14_qPCR_late_42$Treatment <- factor(phage14_qPCR_late_42$Treatment, levels=c("phage14", "P14", "L14","3P"), labels=c("14-1", "P + 14-1","L + 14-1", "3-phage"))
-phage14_qPCR_late_42$Competitor <- factor(phage14_qPCR_late_42$Competitor, levels=c("No_competitor","PEV2", "LUZ19","3P"), labels=c("No competitor","PEV2","LUZ19","3-phage"))
+# Plots - separate plots needed for each phage as different competitor order and different significance indicators
 
-model <- lme(DNA_conc ~ Competitor, random= ~1|Batch, data= phage14_qPCR_late_42, method = "REML", weights = varIdent(form = ~1|Competitor))
-plot(model)
-anova(model)
-emmeans(model, pairwise ~ Competitor)
+# Filter dataset
+PEV2_qPCR <- qPCR_data %>%
+  filter(Phage=="PEV2" & Time == "5" & Temp == 42)
 
-pev2_comp_42 <- ggplot(data=pev2_qPCR_late_42, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
-  #geom_violin(alpha=0.5, position = position_dodge(width = .75),size=1,color=NA)+
+LUZ19_qPCR <- qPCR_data %>%
+  filter(Phage=="LUZ19" & Time == "5" & Temp == 42)
+
+phage14_qPCR <- qPCR_data %>%
+  filter(Phage=="phage14" & Time == "5" & Temp == 42)
+
+# Order competitors
+
+PEV2_qPCR$Competitor <- factor(PEV2_qPCR$Competitor, levels=c("No_competitor","LUZ19", "phage14","3P"), labels=c("No competitor","LUZ19","14-1","3-phage"))
+LUZ19_qPCR$Competitor <- factor(LUZ19_qPCR$Competitor, levels=c("No_competitor","PEV2", "phage14","3P"), labels=c("No competitor","PEV2","14-1","3-phage"))
+phage14_qPCR$Competitor <- factor(phage14_qPCR$Competitor, levels=c("No_competitor","PEV2", "LUZ19","3P"), labels=c("No competitor","PEV2","LUZ19","3-phage"))
+
+#Plots
+
+pev2_plot <- ggplot(data=PEV2_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
   ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(0.1,1000)) +
   annotation_logticks(sides="l")+
-  #geom_signif(y_position = 2.8, xmin = 1, 
-  #  xmax = 2, annotation = "*",
-  #  tip_length = 0.05)+
   theme_bw()+
-  geom_smooth(method = "lm")+
   scale_fill_manual(values = "#fc4e2a") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   theme(axis.title=element_text(size=10,face="bold")) + 
-  #theme(axis.text.x = element_text(angle = 45, vjust = 0.1, hjust=1))+
   theme(legend.position = "none")
 
-luz19_comp_42 <- ggplot(data=luz19_qPCR_late_42, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
-  #geom_violin(alpha=0.5, position = position_dodge(width = .75),size=1,color=NA)+
+
+luz19_plot <- ggplot(data=LUZ19_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
   geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
   ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
   ylab("Fold change in DNA copies relative to T0") +
   xlab("Phage competitor") +
   scale_y_continuous(trans='log10', limits = c(0.1,1000)) +
   annotation_logticks(sides="l")+
-  #geom_signif(y_position = 2.8, xmin = 1, 
-  #  xmax = 2, annotation = "*",
-  #  tip_length = 0.05)+
   theme_bw()+
-  geom_smooth(method = "lm")+
-  scale_fill_manual(values = "#fc4e2a") +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
-  theme(axis.title.y=element_blank()) + 
-  theme(axis.title=element_text(size=10,face="bold")) + 
-  #theme(axis.text.x = element_text(angle = 45, vjust = 0.1, hjust=1))+
-  theme(legend.position = "none")
-
-phage14_comp_42 <- ggplot(data=phage14_qPCR_late_42, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
-  #geom_violin(alpha=0.5, position = position_dodge(width = .75),size=1,color=NA)+
-  geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
-  ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
-  ylab("Fold change in DNA copies relative to T0") +
-  xlab("Phage competitor") +
-  scale_y_continuous(trans='log10', limits = c(0.1,1000)) +
-  annotation_logticks(sides="l")+
-  #geom_signif(y_position = 2.8, xmin = 1, 
-  #  xmax = 2, annotation = "*",
-  #  tip_length = 0.05)+
-  theme_bw()+
-  geom_smooth(method = "lm")+
   scale_fill_manual(values = "#fc4e2a") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   theme(axis.title.y=element_blank()) + 
   theme(axis.title=element_text(size=10,face="bold")) + 
-  #theme(axis.text.x = element_text(angle = 45, vjust = 0.1, hjust=1))+
   theme(legend.position = "none")
 
-pev2_comp_42+luz19_comp_42+ phage14_comp_42
+
+phage14_plot <- ggplot(data=phage14_qPCR, aes(Competitor, Fold_change_DNAconc_to_zero, fill = Temp))  + 
+  geom_boxplot(width=0.5,notch = FALSE,  outlier.size = -1, color="black",lwd=1, alpha = 0.7,show.legend = F, varwidth=FALSE,position = position_dodge(width = .75))+
+  ggbeeswarm::geom_quasirandom(shape = 21,size=2, dodge.width = .75, color="black",alpha=.5,show.legend = F)+
+  ylab("Fold change in DNA copies relative to T0") +
+  xlab("Phage competitor") +
+  scale_y_continuous(trans='log10', limits = c(0.1,1000)) +
+  annotation_logticks(sides="l")+
+  theme_bw()+
+  scale_fill_manual(values = "#fc4e2a") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(axis.title.y=element_blank()) + 
+  theme(axis.title=element_text(size=10,face="bold")) + 
+  theme(legend.position = "none")
+
+
+pev2_plot + luz19_plot + phage14_plot
 
 ggsave("Fig_S7.tiff")
-
 
